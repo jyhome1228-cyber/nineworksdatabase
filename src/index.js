@@ -1,3 +1,5 @@
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
 function cleanSegment(value, fallback = 'uploads') {
   const cleaned = String(value || '')
     .normalize('NFKD')
@@ -58,8 +60,8 @@ async function uploadImage(request, env) {
     return Response.json({ ok: false, message: 'Image file is required.' }, { status: 400 });
   }
 
-  if (file.size > 10 * 1024 * 1024) {
-    return Response.json({ ok: false, message: 'Image is too large. Maximum is 10 MB.' }, { status: 413 });
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return Response.json({ ok: false, message: 'Converted image is too large. Maximum is 25 MB.' }, { status: 413 });
   }
 
   if (!['image/webp', 'image/jpeg', 'image/png'].includes(file.type)) {
