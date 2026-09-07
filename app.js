@@ -1,4 +1,7 @@
-const MAX_FILES = 20;
+const MAX_FILES = 10;
+const MAX_OPTIMIZED_BYTES = 1.3 * 1024 * 1024;
+const DEFAULT_API_URL = 'https://nineworksdatabase.vercel.app/api/upload';
+const API_URL = location.hostname.endsWith('.vercel.app') ? '/api/upload' : DEFAULT_API_URL;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -8,7 +11,7 @@ const fileInput = $('#fileInput');
 const maxWidthInput = $('#maxWidth');
 const qualityInput = $('#quality');
 const queue = $('#queue');
-const convertBtn = $('#convertBtn');
+const uploadBtn = $('#uploadBtn');
 const clearBtn = $('#clearBtn');
 const progressWrap = $('#progressWrap');
 const progressBar = $('#progressBar');
@@ -23,8 +26,8 @@ const totalBefore = $('#totalBefore');
 const totalAfter = $('#totalAfter');
 
 let selectedFiles = [];
-let convertedFiles = [];
-let activeTab = 'base64';
+let uploadedFiles = [];
+let activeTab = 'url';
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB';
@@ -43,18 +46,6 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function safeName(name, index) {
-  const base = name.replace(/\.[^/.]+$/, '');
-  const normalized = base
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-+/g, '-');
-  return `${normalized || `image-${String(index + 1).padStart(2, '0')}`}.webp`;
-}
-
 function setStatus(text) {
   statusBadge.textContent = text.toUpperCase();
 }
@@ -68,12 +59,12 @@ function setProgress(percent, text) {
 function updateStats() {
   fileCount.textContent = selectedFiles.length;
   totalBefore.textContent = formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0));
-  totalAfter.textContent = formatBytes(convertedFiles.reduce((sum, file) => sum + file.blob.size, 0));
+  totalAfter.textContent = formatBytes(uploadedFiles.reduce((sum, file) => sum + file.blob.size, 0));
 }
 
 function renderQueue() {
   updateStats();
-  convertBtn.disabled = selectedFiles.length === 0;
+  uploadBtn.disabled = selectedFiles.length === 0;
 
   if (!selectedFiles.length) {
     queue.className = 'queue empty';
@@ -113,15 +104,13 @@ function addFiles(fileList) {
   }
 
   selectedFiles = [...selectedFiles, ...images.slice(0, available)];
-  convertedFiles = [];
+  uploadedFiles = [];
   resultPanel.hidden = true;
   progressWrap.hidden = true;
   setStatus('READY');
   renderQueue();
 
-  if (images.length > available) {
-    alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
-  }
+  if (images.length > available) alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
 }
 
 function loadImage(file) {
@@ -149,59 +138,91 @@ function canvasToBlob(canvas, quality) {
   });
 }
 
-function blobToDataUrl(blob) {
+function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
 }
 
-async function convertFile(file, index) {
+async function optimizeFile(file) {
   const image = await loadImage(file);
   const maxWidth = Number(maxWidthInput.value);
-  const quality = Number(qualityInput.value);
-  const scale = Math.min(1, maxWidth / image.naturalWidth);
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const selectedQuality = Number(qualityInput.value);
 
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  let scale = Math.min(1, maxWidth / image.naturalWidth);
+  let width = Math.max(1, Math.round(image.naturalWidth * scale));
+  let height = Math.max(1, Math.round(image.naturalHeight * scale));
+  let quality = selectedQuality;
+  let blob = null;
 
-  const context = canvas.getContext('2d', { alpha: true });
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(image, 0, 0, width, height);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { alpha: true });
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, 0, 0, width, height);
+    blob = await canvasToBlob(canvas, quality);
 
-  const blob = await canvasToBlob(canvas, quality);
-  const dataUrl = await blobToDataUrl(blob);
+    if (blob.size <= MAX_OPTIMIZED_BYTES) break;
 
-  return {
-    original: file,
-    name: safeName(file.name, index),
-    blob,
-    dataUrl,
-    width,
-    height
-  };
+    if (quality > 0.66) {
+      quality = Math.max(0.66, quality - 0.07);
+    } else {
+      width = Math.max(1200, Math.round(width * 0.84));
+      height = Math.max(1, Math.round(image.naturalHeight * (width / image.naturalWidth)));
+    }
+  }
+
+  if (!blob || blob.size > MAX_OPTIMIZED_BYTES) {
+    throw new Error(`${file.name} 최적화 용량이 너무 큽니다. Max width를 낮춰주세요.`);
+  }
+
+  return { original: file, blob, width, height, quality };
+}
+
+async function uploadOptimized(item) {
+  const content = await blobToBase64(item.blob);
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: item.original.name,
+      content
+    })
+  });
+
+  let data = {};
+  try { data = await response.json(); } catch {}
+
+  if (!response.ok) {
+    if (response.status === 503) {
+      throw new Error('CDN 업로드 서버가 아직 연결되지 않았습니다. Vercel에 GITHUB_IMAGE_TOKEN을 한 번 설정해야 합니다.');
+    }
+    throw new Error(data.message || `업로드 오류 (${response.status})`);
+  }
+
+  return { ...item, ...data };
 }
 
 function getCode(type) {
   if (type === 'html') {
-    return convertedFiles
-      .map((item) => `<img src="${item.dataUrl}" alt="" loading="lazy">`)
+    return uploadedFiles
+      .map((item) => `<img src="${item.cdnUrl}" alt="" loading="lazy">`)
       .join('\n');
   }
 
   if (type === 'css') {
-    return convertedFiles
-      .map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.dataUrl}");\n  background-size: cover;\n  background-position: center;\n}`)
+    return uploadedFiles
+      .map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.cdnUrl}");\n}`)
       .join('\n\n');
   }
 
-  return convertedFiles.map((item) => item.dataUrl).join('\n\n');
+  return uploadedFiles.map((item) => item.cdnUrl).join('\n');
 }
 
 function renderResults() {
@@ -209,35 +230,37 @@ function renderResults() {
   codeOutput.textContent = getCode(activeTab);
   convertedGrid.innerHTML = '';
 
-  convertedFiles.forEach((item) => {
+  uploadedFiles.forEach((item) => {
     const card = document.createElement('article');
     card.className = 'converted-card';
+    const preview = URL.createObjectURL(item.blob);
     card.innerHTML = `
-      <img src="${item.dataUrl}" alt="">
+      <img src="${preview}" alt="">
       <div class="converted-info">
-        <strong title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</strong>
+        <strong title="${escapeHtml(item.fileName)}">${escapeHtml(item.fileName)}</strong>
         <span>${item.width} × ${item.height} · ${formatBytes(item.blob.size)}</span>
+        <div class="cdn-line" title="${escapeHtml(item.cdnUrl)}">${escapeHtml(item.cdnUrl)}</div>
         <div class="card-actions">
-          <button class="mini-button copy-one" type="button">COPY HTML</button>
-          <button class="mini-button download-one" type="button">WEBP</button>
+          <button class="mini-button copy-url" type="button">COPY URL</button>
+          <button class="mini-button copy-html" type="button">COPY HTML</button>
         </div>
       </div>
     `;
 
-    card.querySelector('.copy-one').addEventListener('click', async (event) => {
-      await navigator.clipboard.writeText(`<img src="${item.dataUrl}" alt="" loading="lazy">`);
+    card.querySelector('.copy-url').addEventListener('click', async (event) => {
+      await navigator.clipboard.writeText(item.cdnUrl);
       const button = event.currentTarget;
-      const previous = button.textContent;
+      const before = button.textContent;
       button.textContent = 'COPIED';
-      setTimeout(() => { button.textContent = previous; }, 1000);
+      setTimeout(() => { button.textContent = before; }, 1000);
     });
 
-    card.querySelector('.download-one').addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(item.blob);
-      link.download = item.name;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    card.querySelector('.copy-html').addEventListener('click', async (event) => {
+      await navigator.clipboard.writeText(`<img src="${item.cdnUrl}" alt="" loading="lazy">`);
+      const button = event.currentTarget;
+      const before = button.textContent;
+      button.textContent = 'COPIED';
+      setTimeout(() => { button.textContent = before; }, 1000);
     });
 
     convertedGrid.appendChild(card);
@@ -270,30 +293,40 @@ dropzone.addEventListener('drop', (event) => addFiles(event.dataTransfer.files))
 
 clearBtn.addEventListener('click', () => {
   selectedFiles = [];
-  convertedFiles = [];
+  uploadedFiles = [];
   resultPanel.hidden = true;
   progressWrap.hidden = true;
   setStatus('READY');
   renderQueue();
 });
 
-convertBtn.addEventListener('click', async () => {
+uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
 
-  convertBtn.disabled = true;
+  uploadBtn.disabled = true;
   clearBtn.disabled = true;
-  convertedFiles = [];
+  uploadedFiles = [];
   resultPanel.hidden = true;
   setStatus('WORKING');
 
   try {
     for (let index = 0; index < selectedFiles.length; index += 1) {
-      setProgress((index / selectedFiles.length) * 90, `변환 중 ${index + 1}/${selectedFiles.length} · ${selectedFiles[index].name}`);
-      convertedFiles.push(await convertFile(selectedFiles[index], index));
+      const file = selectedFiles[index];
+      const start = (index / selectedFiles.length) * 100;
+      const span = 100 / selectedFiles.length;
+
+      setProgress(start + span * 0.15, `WebP 변환 중 ${index + 1}/${selectedFiles.length} · ${file.name}`);
+      const optimized = await optimizeFile(file);
+
+      setProgress(start + span * 0.55, `GitHub 저장 중 ${index + 1}/${selectedFiles.length} · ${file.name}`);
+      const uploaded = await uploadOptimized(optimized);
+      uploadedFiles.push(uploaded);
       updateStats();
+
+      setProgress(start + span, `CDN 생성 완료 ${index + 1}/${selectedFiles.length}`);
     }
 
-    setProgress(100, `${convertedFiles.length}개 이미지 코드 생성 완료`);
+    setProgress(100, `${uploadedFiles.length}개 CDN URL 생성 완료`);
     setStatus('DONE');
     renderResults();
   } catch (error) {
@@ -302,7 +335,7 @@ convertBtn.addEventListener('click', async () => {
     setProgress(0, error.message);
     alert(error.message);
   } finally {
-    convertBtn.disabled = false;
+    uploadBtn.disabled = false;
     clearBtn.disabled = false;
   }
 });
