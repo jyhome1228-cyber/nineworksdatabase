@@ -27,7 +27,7 @@
     <section class="hero-section library-hero" aria-labelledby="page-title">
       <div class="hero-copy">
         <h2 id="page-title">프로젝트별 이미지와<br>코드를 한 곳에서.</h2>
-        <p>R2에 저장된 이미지를 프로젝트 폴더 기준으로 모아보고, 필요한 CDN URL · HTML · CSS 코드를 다시 복사할 수 있습니다.</p>
+        <p>R2에 저장된 이미지를 프로젝트 폴더 기준으로 모아보고, 필요한 CDN URL · HTML · CSS 코드를 다시 복사하거나 더 이상 쓰지 않는 파일을 정리할 수 있습니다.</p>
       </div>
       <dl class="stats" aria-label="라이브러리 통계">
         <div><dt>FILES</dt><dd id="assetCount">0</dd></div>
@@ -93,6 +93,18 @@
         </div>
       </div>
 
+      <div class="selection-toolbar" id="selectionToolbar">
+        <div class="selection-info">
+          <strong id="selectedCount">0개 선택</strong>
+          <span>현재 불러온 이미지에서 선택해 삭제할 수 있습니다.</span>
+        </div>
+        <div class="selection-actions">
+          <button id="selectAllBtn" class="button button-secondary" type="button">현재 목록 전체 선택</button>
+          <button id="clearSelectionBtn" class="button button-secondary" type="button" disabled>선택 해제</button>
+          <button id="deleteSelectedBtn" class="button button-critical" type="button" disabled>선택 삭제</button>
+        </div>
+      </div>
+
       <div id="libraryGrid" class="library-grid" aria-live="polite"></div>
       <div id="emptyLibrary" class="library-empty" hidden>
         <strong>이 폴더에는 아직 이미지가 없습니다.</strong>
@@ -109,6 +121,21 @@
       <span>CLOUDFLARE R2 · LIBRARY</span>
     </footer>
   </main>
+
+  <div id="deleteModal" class="modal-backdrop" hidden>
+    <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle" aria-describedby="deleteModalDescription">
+      <p class="eyebrow">DELETE ASSET</p>
+      <h2 id="deleteModalTitle">이미지를 삭제할까요?</h2>
+      <p id="deleteModalDescription">삭제한 파일은 R2에서 제거되며 복구할 수 없습니다.</p>
+      <div class="delete-summary" id="deleteSummary"></div>
+      <div class="modal-actions">
+        <button id="cancelDeleteBtn" class="button button-secondary" type="button">취소</button>
+        <button id="confirmDeleteBtn" class="button button-critical" type="button">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="./library.js"></script>
 </body>
