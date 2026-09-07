@@ -1,25 +1,35 @@
-# Nineworks Image Code Test
+# Nineworks CDN Uploader
 
-Simple GitHub Pages test utility for checking local image-to-code conversion.
+Simple browser-based image uploader for testing a direct CDN workflow.
 
 ## What it does
 
-- Drag JPG / PNG / WEBP images into the page
-- Convert them to WebP in the browser
-- Choose max width and WebP quality
-- Generate Base64 data URLs
-- Generate ready-to-copy HTML `<img>` code
-- Generate CSS `background-image` code
-- Preview and optionally download the converted WebP
+- Drop up to 10 JPG / PNG / WEBP images
+- Convert them to optimized WebP in the browser
+- Upload directly to Cloudinary with an **unsigned upload preset**
+- Return short CDN URLs plus reusable HTML / CSS code
+- Save the Cloud name, preset name, and folder locally in the browser for convenience
 
-## No authentication
-
-This test build does **not** upload images to GitHub and does not use GitHub tokens, access codes, Vercel, or a backend server. Everything happens locally in the browser.
-
-## GitHub Pages
+## Live page
 
 `https://jyhome1228-cyber.github.io/nineworksdatabase/`
 
-## Test limit
+## One-time setup
 
-Up to 20 images per batch to keep large Base64 output manageable in the browser.
+1. Create a free Cloudinary account.
+2. Create an **unsigned upload preset**.
+3. Copy your **Cloud name** and the **preset name**.
+4. Open the page above and enter the Cloud name and preset name once.
+5. Drag images and click **UPLOAD & GET CDN**.
+
+## Output
+
+- CDN URL
+- HTML `<img>` code
+- CSS `background-image` code
+
+## Notes
+
+- This version does **not** upload images to GitHub.
+- No GitHub token, Vercel, or separate backend is needed for this test flow.
+- The unsigned preset is intentionally used for a simple personal test workflow.
