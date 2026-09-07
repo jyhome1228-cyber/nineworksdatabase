@@ -32,14 +32,13 @@ async function uploadImage(request, env) {
   const url = new URL(request.url);
   const origin = request.headers.get('Origin');
 
-  // No login/token UI. Basic same-origin guard only.
   if (origin && origin !== url.origin) {
     return Response.json({ ok: false, message: 'Cross-origin upload blocked.' }, { status: 403 });
   }
 
   const form = await request.formData();
   const file = form.get('file');
-  const folder = cleanSegment(form.get('folder') || 'uploads');
+  const folder = cleanSegment(form.get('folder') || 'uncategorized', 'uncategorized');
   const originalName = String(form.get('name') || file?.name || 'image.webp');
 
   if (!(file instanceof File)) {
@@ -64,17 +63,36 @@ async function uploadImage(request, env) {
       contentType: 'image/webp',
       cacheControl: 'public, max-age=31536000, immutable'
     },
-    customMetadata: {
-      originalName
-    }
+    customMetadata: { originalName }
   });
 
   return Response.json({
     ok: true,
     key,
+    folder,
     fileName: key.split('/').pop(),
     cdnUrl: objectUrl(url.origin, key)
   });
+}
+
+async function listFolders(env) {
+  const folders = new Set(['uncategorized']);
+  let cursor;
+
+  do {
+    const page = await env.IMAGE_BUCKET.list({ delimiter: '/', cursor, limit: 1000 });
+    for (const prefix of page.delimitedPrefixes || []) {
+      const folder = prefix.replace(/\/$/, '');
+      if (folder) folders.add(folder);
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  return Response.json({ ok: true, folders: [...folders].sort((a, b) => {
+    if (a === 'uncategorized') return -1;
+    if (b === 'uncategorized') return 1;
+    return a.localeCompare(b);
+  }) });
 }
 
 async function serveImage(request, env) {
@@ -101,6 +119,10 @@ export default {
 
     if (url.pathname === '/api/upload' && request.method === 'POST') {
       return uploadImage(request, env);
+    }
+
+    if (url.pathname === '/api/folders' && request.method === 'GET') {
+      return listFolders(env);
     }
 
     if (url.pathname.startsWith('/cdn/') && (request.method === 'GET' || request.method === 'HEAD')) {
