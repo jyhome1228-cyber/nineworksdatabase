@@ -1,13 +1,15 @@
 const MAX_FILES = 10;
-const MAX_OPTIMIZED_BYTES = 1.3 * 1024 * 1024;
-const DEFAULT_API_URL = 'https://nineworksdatabase.vercel.app/api/upload';
-const API_URL = location.hostname.endsWith('.vercel.app') ? '/api/upload' : DEFAULT_API_URL;
+const DEFAULT_FOLDER = 'nineworks/test';
+const STORAGE_KEY = 'nineworks_cloudinary_config';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const dropzone = $('#dropzone');
 const fileInput = $('#fileInput');
+const cloudNameInput = $('#cloudName');
+const uploadPresetInput = $('#uploadPreset');
+const folderInput = $('#folder');
 const maxWidthInput = $('#maxWidth');
 const qualityInput = $('#quality');
 const queue = $('#queue');
@@ -20,13 +22,13 @@ const statusBadge = $('#statusBadge');
 const resultPanel = $('#resultPanel');
 const codeOutput = $('#codeOutput');
 const copyBtn = $('#copyBtn');
-const convertedGrid = $('#convertedGrid');
+const uploadedGrid = $('#uploadedGrid');
 const fileCount = $('#fileCount');
 const totalBefore = $('#totalBefore');
 const totalAfter = $('#totalAfter');
 
 let selectedFiles = [];
-let uploadedFiles = [];
+let uploadedItems = [];
 let activeTab = 'url';
 
 function formatBytes(bytes) {
@@ -46,6 +48,52 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+function slugify(value, fallback = 'image') {
+  const normalized = String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9/_-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-_/]+|[-_/]+$/g, '');
+  return normalized || fallback;
+}
+
+function safeFolder(value) {
+  return slugify(value || DEFAULT_FOLDER, DEFAULT_FOLDER).replace(/\/{2,}/g, '/');
+}
+
+function safeName(name, index) {
+  const base = name.replace(/\.[^/.]+$/, '');
+  const normalized = slugify(base, `image-${String(index + 1).padStart(2, '0')}`).replaceAll('/', '-');
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+  const token = Math.random().toString(36).slice(2, 7);
+  return `${stamp}-${normalized}-${token}`;
+}
+
+function getConfig() {
+  return {
+    cloudName: cloudNameInput.value.trim(),
+    uploadPreset: uploadPresetInput.value.trim(),
+    folder: safeFolder(folderInput.value.trim() || DEFAULT_FOLDER)
+  };
+}
+
+function saveConfig() {
+  const config = getConfig();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
+function loadConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (saved.cloudName) cloudNameInput.value = saved.cloudName;
+    if (saved.uploadPreset) uploadPresetInput.value = saved.uploadPreset;
+    if (saved.folder) folderInput.value = saved.folder;
+  } catch {}
+  if (!folderInput.value.trim()) folderInput.value = DEFAULT_FOLDER;
+}
+
 function setStatus(text) {
   statusBadge.textContent = text.toUpperCase();
 }
@@ -59,7 +107,7 @@ function setProgress(percent, text) {
 function updateStats() {
   fileCount.textContent = selectedFiles.length;
   totalBefore.textContent = formatBytes(selectedFiles.reduce((sum, file) => sum + file.size, 0));
-  totalAfter.textContent = formatBytes(uploadedFiles.reduce((sum, file) => sum + file.blob.size, 0));
+  totalAfter.textContent = formatBytes(uploadedItems.reduce((sum, file) => sum + (file.blob?.size || 0), 0));
 }
 
 function renderQueue() {
@@ -99,18 +147,20 @@ function addFiles(fileList) {
 
   const available = MAX_FILES - selectedFiles.length;
   if (available <= 0) {
-    alert(`테스트에서는 한 번에 최대 ${MAX_FILES}장까지 처리합니다.`);
+    alert(`한 번에 최대 ${MAX_FILES}장까지만 처리합니다.`);
     return;
   }
 
   selectedFiles = [...selectedFiles, ...images.slice(0, available)];
-  uploadedFiles = [];
+  uploadedItems = [];
   resultPanel.hidden = true;
   progressWrap.hidden = true;
   setStatus('READY');
   renderQueue();
 
-  if (images.length > available) alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
+  if (images.length > available) {
+    alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
+  }
 }
 
 function loadImage(file) {
@@ -138,111 +188,95 @@ function canvasToBlob(canvas, quality) {
   });
 }
 
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function optimizeFile(file) {
+async function convertFile(file, index) {
   const image = await loadImage(file);
   const maxWidth = Number(maxWidthInput.value);
-  const selectedQuality = Number(qualityInput.value);
+  const quality = Number(qualityInput.value);
+  const scale = Math.min(1, maxWidth / image.naturalWidth);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
 
-  let scale = Math.min(1, maxWidth / image.naturalWidth);
-  let width = Math.max(1, Math.round(image.naturalWidth * scale));
-  let height = Math.max(1, Math.round(image.naturalHeight * scale));
-  let quality = selectedQuality;
-  let blob = null;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { alpha: true });
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(image, 0, 0, width, height);
 
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d', { alpha: true });
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(image, 0, 0, width, height);
-    blob = await canvasToBlob(canvas, quality);
-
-    if (blob.size <= MAX_OPTIMIZED_BYTES) break;
-
-    if (quality > 0.66) {
-      quality = Math.max(0.66, quality - 0.07);
-    } else {
-      width = Math.max(1200, Math.round(width * 0.84));
-      height = Math.max(1, Math.round(image.naturalHeight * (width / image.naturalWidth)));
-    }
-  }
-
-  if (!blob || blob.size > MAX_OPTIMIZED_BYTES) {
-    throw new Error(`${file.name} 최적화 용량이 너무 큽니다. Max width를 낮춰주세요.`);
-  }
-
-  return { original: file, blob, width, height, quality };
+  const blob = await canvasToBlob(canvas, quality);
+  return {
+    original: file,
+    blob,
+    width,
+    height,
+    publicId: safeName(file.name, index)
+  };
 }
 
-async function uploadOptimized(item) {
-  const content = await blobToBase64(item.blob);
-  const response = await fetch(API_URL, {
+async function uploadToCloudinary(item, config) {
+  const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(config.cloudName)}/image/upload`;
+  const formData = new FormData();
+  formData.append('file', item.blob, `${item.publicId}.webp`);
+  formData.append('upload_preset', config.uploadPreset);
+  formData.append('folder', config.folder);
+  formData.append('public_id', item.publicId);
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: item.original.name,
-      content
-    })
+    body: formData
   });
 
-  let data = {};
-  try { data = await response.json(); } catch {}
-
+  const data = await response.json();
   if (!response.ok) {
-    if (response.status === 503) {
-      throw new Error('CDN 업로드 서버가 아직 연결되지 않았습니다. Vercel에 GITHUB_IMAGE_TOKEN을 한 번 설정해야 합니다.');
-    }
-    throw new Error(data.message || `업로드 오류 (${response.status})`);
+    throw new Error(data?.error?.message || 'Cloudinary 업로드에 실패했습니다.');
   }
 
-  return { ...item, ...data };
+  return {
+    ...item,
+    secureUrl: data.secure_url,
+    publicIdFull: data.public_id,
+    format: data.format || 'webp'
+  };
+}
+
+function cloudinaryDeliveryUrl(config, publicIdFull) {
+  return `https://res.cloudinary.com/${encodeURIComponent(config.cloudName)}/image/upload/f_auto,q_auto/${publicIdFull}`;
 }
 
 function getCode(type) {
   if (type === 'html') {
-    return uploadedFiles
+    return uploadedItems
       .map((item) => `<img src="${item.cdnUrl}" alt="" loading="lazy">`)
       .join('\n');
   }
 
   if (type === 'css') {
-    return uploadedFiles
-      .map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.cdnUrl}");\n}`)
+    return uploadedItems
+      .map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.cdnUrl}");\n  background-size: cover;\n  background-position: center;\n}`)
       .join('\n\n');
   }
 
-  return uploadedFiles.map((item) => item.cdnUrl).join('\n');
+  return uploadedItems.map((item) => item.cdnUrl).join('\n');
 }
 
 function renderResults() {
   resultPanel.hidden = false;
   codeOutput.textContent = getCode(activeTab);
-  convertedGrid.innerHTML = '';
+  uploadedGrid.innerHTML = '';
 
-  uploadedFiles.forEach((item) => {
+  uploadedItems.forEach((item) => {
     const card = document.createElement('article');
-    card.className = 'converted-card';
-    const preview = URL.createObjectURL(item.blob);
+    card.className = 'uploaded-card';
     card.innerHTML = `
-      <img src="${preview}" alt="">
-      <div class="converted-info">
-        <strong title="${escapeHtml(item.fileName)}">${escapeHtml(item.fileName)}</strong>
+      <img src="${item.cdnUrl}" alt="">
+      <div class="uploaded-info">
+        <strong title="${escapeHtml(item.publicIdFull)}">${escapeHtml(item.publicIdFull)}</strong>
         <span>${item.width} × ${item.height} · ${formatBytes(item.blob.size)}</span>
-        <div class="cdn-line" title="${escapeHtml(item.cdnUrl)}">${escapeHtml(item.cdnUrl)}</div>
-        <div class="card-actions">
+        <div class="uploaded-actions">
           <button class="mini-button copy-url" type="button">COPY URL</button>
           <button class="mini-button copy-html" type="button">COPY HTML</button>
+          <a class="mini-button" href="${item.cdnUrl}" target="_blank" rel="noreferrer">OPEN</a>
         </div>
       </div>
     `;
@@ -250,24 +284,85 @@ function renderResults() {
     card.querySelector('.copy-url').addEventListener('click', async (event) => {
       await navigator.clipboard.writeText(item.cdnUrl);
       const button = event.currentTarget;
-      const before = button.textContent;
+      const previous = button.textContent;
       button.textContent = 'COPIED';
-      setTimeout(() => { button.textContent = before; }, 1000);
+      setTimeout(() => { button.textContent = previous; }, 1000);
     });
 
     card.querySelector('.copy-html').addEventListener('click', async (event) => {
       await navigator.clipboard.writeText(`<img src="${item.cdnUrl}" alt="" loading="lazy">`);
       const button = event.currentTarget;
-      const before = button.textContent;
+      const previous = button.textContent;
       button.textContent = 'COPIED';
-      setTimeout(() => { button.textContent = before; }, 1000);
+      setTimeout(() => { button.textContent = previous; }, 1000);
     });
 
-    convertedGrid.appendChild(card);
+    uploadedGrid.appendChild(card);
   });
 
   resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+function validateSetup() {
+  const config = getConfig();
+  if (!config.cloudName) throw new Error('Cloud name을 입력해주세요.');
+  if (!config.uploadPreset) throw new Error('Upload preset을 입력해주세요.');
+  return config;
+}
+
+uploadBtn.addEventListener('click', async () => {
+  if (!selectedFiles.length) return;
+
+  let config;
+  try {
+    config = validateSetup();
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
+
+  saveConfig();
+  uploadBtn.disabled = true;
+  clearBtn.disabled = true;
+  uploadedItems = [];
+  resultPanel.hidden = true;
+  setStatus('WORKING');
+
+  try {
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      setProgress((index / selectedFiles.length) * 45, `WebP 변환 중 ${index + 1}/${selectedFiles.length} · ${selectedFiles[index].name}`);
+      const converted = await convertFile(selectedFiles[index], index);
+      setProgress(45 + (index / selectedFiles.length) * 45, `CDN 업로드 중 ${index + 1}/${selectedFiles.length} · ${selectedFiles[index].name}`);
+      const uploaded = await uploadToCloudinary(converted, config);
+      uploadedItems.push({
+        ...uploaded,
+        cdnUrl: cloudinaryDeliveryUrl(config, uploaded.publicIdFull)
+      });
+      updateStats();
+    }
+
+    setProgress(100, `${uploadedItems.length}개 이미지 업로드 완료`);
+    setStatus('DONE');
+    renderResults();
+  } catch (error) {
+    console.error(error);
+    setStatus('ERROR');
+    setProgress(0, error.message);
+    alert(error.message);
+  } finally {
+    uploadBtn.disabled = false;
+    clearBtn.disabled = false;
+  }
+});
+
+clearBtn.addEventListener('click', () => {
+  selectedFiles = [];
+  uploadedItems = [];
+  resultPanel.hidden = true;
+  progressWrap.hidden = true;
+  setStatus('READY');
+  renderQueue();
+});
 
 dropzone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (event) => {
@@ -291,55 +386,6 @@ fileInput.addEventListener('change', (event) => {
 
 dropzone.addEventListener('drop', (event) => addFiles(event.dataTransfer.files));
 
-clearBtn.addEventListener('click', () => {
-  selectedFiles = [];
-  uploadedFiles = [];
-  resultPanel.hidden = true;
-  progressWrap.hidden = true;
-  setStatus('READY');
-  renderQueue();
-});
-
-uploadBtn.addEventListener('click', async () => {
-  if (!selectedFiles.length) return;
-
-  uploadBtn.disabled = true;
-  clearBtn.disabled = true;
-  uploadedFiles = [];
-  resultPanel.hidden = true;
-  setStatus('WORKING');
-
-  try {
-    for (let index = 0; index < selectedFiles.length; index += 1) {
-      const file = selectedFiles[index];
-      const start = (index / selectedFiles.length) * 100;
-      const span = 100 / selectedFiles.length;
-
-      setProgress(start + span * 0.15, `WebP 변환 중 ${index + 1}/${selectedFiles.length} · ${file.name}`);
-      const optimized = await optimizeFile(file);
-
-      setProgress(start + span * 0.55, `GitHub 저장 중 ${index + 1}/${selectedFiles.length} · ${file.name}`);
-      const uploaded = await uploadOptimized(optimized);
-      uploadedFiles.push(uploaded);
-      updateStats();
-
-      setProgress(start + span, `CDN 생성 완료 ${index + 1}/${selectedFiles.length}`);
-    }
-
-    setProgress(100, `${uploadedFiles.length}개 CDN URL 생성 완료`);
-    setStatus('DONE');
-    renderResults();
-  } catch (error) {
-    console.error(error);
-    setStatus('ERROR');
-    setProgress(0, error.message);
-    alert(error.message);
-  } finally {
-    uploadBtn.disabled = false;
-    clearBtn.disabled = false;
-  }
-});
-
 $$('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
     $$('.tab').forEach((item) => item.classList.remove('active'));
@@ -356,4 +402,10 @@ copyBtn.addEventListener('click', async () => {
   setTimeout(() => { copyBtn.textContent = previous; }, 1000);
 });
 
+[cloudNameInput, uploadPresetInput, folderInput].forEach((input) => {
+  input.addEventListener('change', saveConfig);
+  input.addEventListener('blur', saveConfig);
+});
+
+loadConfig();
 renderQueue();
