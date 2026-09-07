@@ -1,11 +1,15 @@
 const MAX_FILES = 20;
-const SETTINGS_KEY = 'nineworks-r2-settings';
+const SETTINGS_KEY = 'nineworks_asset_settings_v2';
+const UNCATEGORIZED = 'uncategorized';
+
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
 const dropzone = $('#dropzone');
 const fileInput = $('#fileInput');
-const folderInput = $('#folder');
+const folderSelect = $('#folderSelect');
+const newFolderField = $('#newFolderField');
+const newFolderInput = $('#newFolder');
 const maxWidthInput = $('#maxWidth');
 const qualityInput = $('#quality');
 const queue = $('#queue');
@@ -43,21 +47,21 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function loadSettings() {
-  try {
-    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-    if (settings.folder) folderInput.value = settings.folder;
-    if (settings.maxWidth) maxWidthInput.value = settings.maxWidth;
-    if (settings.quality) qualityInput.value = settings.quality;
-  } catch {}
+function cleanFolder(value) {
+  const cleaned = String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9/_-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^[-_/]+|[-_/]+$/g, '');
+  return cleaned || UNCATEGORIZED;
 }
 
-function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-    folder: folderInput.value.trim(),
-    maxWidth: maxWidthInput.value,
-    quality: qualityInput.value
-  }));
+function currentFolder() {
+  if (folderSelect.value === '__new__') return cleanFolder(newFolderInput.value);
+  return folderSelect.value || UNCATEGORIZED;
 }
 
 function setStatus(text) {
@@ -112,7 +116,7 @@ function addFiles(fileList) {
 
   const space = MAX_FILES - selectedFiles.length;
   if (space <= 0) {
-    alert(`한 번에 최대 ${MAX_FILES}장까지 업로드할 수 있습니다.`);
+    alert(`한 번에 최대 ${MAX_FILES}장까지 처리할 수 있습니다.`);
     return;
   }
 
@@ -123,9 +127,7 @@ function addFiles(fileList) {
   setStatus('READY');
   renderQueue();
 
-  if (incoming.length > space) {
-    alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
-  }
+  if (incoming.length > space) alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
 }
 
 function loadImage(file) {
@@ -146,11 +148,7 @@ function loadImage(file) {
 
 function canvasToBlob(canvas, quality) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error('WebP 변환에 실패했습니다.')),
-      'image/webp',
-      quality
-    );
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('WebP 변환에 실패했습니다.')), 'image/webp', quality);
   });
 }
 
@@ -174,11 +172,11 @@ async function optimize(file) {
   return { original: file, blob, width, height };
 }
 
-async function upload(item) {
+async function upload(item, folder) {
   const form = new FormData();
   form.append('file', item.blob, item.original.name.replace(/\.[^/.]+$/, '') + '.webp');
   form.append('name', item.original.name);
-  form.append('folder', folderInput.value.trim() || 'uploads');
+  form.append('folder', folder);
 
   const response = await fetch('/api/upload', { method: 'POST', body: form });
   const data = await response.json().catch(() => ({}));
@@ -194,12 +192,6 @@ function getCode(type) {
     return uploadedItems.map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.cdnUrl}");\n}`).join('\n\n');
   }
   return uploadedItems.map((item) => item.cdnUrl).join('\n');
-}
-
-function flashButton(button, text = 'COPIED') {
-  const old = button.textContent;
-  button.textContent = text;
-  setTimeout(() => { button.textContent = old; }, 1000);
 }
 
 function renderResults() {
@@ -218,29 +210,86 @@ function renderResults() {
         <span>${item.width} × ${item.height} · ${formatBytes(item.blob.size)}</span>
         <div class="url-line" title="${escapeHtml(item.cdnUrl)}">${escapeHtml(item.cdnUrl)}</div>
         <div class="card-actions">
-          <button class="mini copy-url" type="button">COPY URL</button>
-          <button class="mini copy-html" type="button">COPY HTML</button>
-          <a class="mini" href="${item.cdnUrl}" target="_blank" rel="noreferrer">OPEN</a>
+          <button class="mini copy-url" type="button">URL 복사</button>
+          <button class="mini copy-html" type="button">HTML 복사</button>
+          <a class="mini" href="${item.cdnUrl}" target="_blank" rel="noreferrer">열기</a>
         </div>
       </div>`;
 
-    const urlButton = card.querySelector('.copy-url');
-    const htmlButton = card.querySelector('.copy-html');
-
-    urlButton.addEventListener('click', async () => {
+    card.querySelector('.copy-url').addEventListener('click', async (event) => {
       await navigator.clipboard.writeText(item.cdnUrl);
-      flashButton(urlButton);
+      flashButton(event.currentTarget, '복사됨');
     });
-
-    htmlButton.addEventListener('click', async () => {
+    card.querySelector('.copy-html').addEventListener('click', async (event) => {
       await navigator.clipboard.writeText(`<img src="${item.cdnUrl}" alt="" loading="lazy">`);
-      flashButton(htmlButton);
+      flashButton(event.currentTarget, '복사됨');
     });
-
     uploadedGrid.appendChild(card);
   });
 
   resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function flashButton(button, message) {
+  const old = button.textContent;
+  button.textContent = message;
+  setTimeout(() => { button.textContent = old; }, 1000);
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    folder: folderSelect.value,
+    customFolder: newFolderInput.value,
+    maxWidth: maxWidthInput.value,
+    quality: qualityInput.value
+  }));
+}
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    if (saved.maxWidth) maxWidthInput.value = saved.maxWidth;
+    if (saved.quality) qualityInput.value = saved.quality;
+    if (saved.customFolder) newFolderInput.value = saved.customFolder;
+    return saved;
+  } catch {
+    return {};
+  }
+}
+
+function renderFolderOptions(folders, preferred) {
+  const existing = new Set([...folderSelect.options].map((option) => option.value));
+  folders.forEach((folder) => {
+    if (!folder || folder === UNCATEGORIZED || existing.has(folder)) return;
+    const option = document.createElement('option');
+    option.value = folder;
+    option.textContent = folder;
+    folderSelect.insertBefore(option, folderSelect.querySelector('option[value="__new__"]'));
+  });
+
+  if (preferred && [...folderSelect.options].some((option) => option.value === preferred)) {
+    folderSelect.value = preferred;
+  }
+  toggleNewFolder();
+}
+
+async function loadFolders(preferred) {
+  try {
+    const response = await fetch('/api/folders', { cache: 'no-store' });
+    const data = await response.json();
+    if (response.ok && Array.isArray(data.folders)) {
+      renderFolderOptions(data.folders, preferred);
+      return;
+    }
+  } catch {}
+  renderFolderOptions([], preferred);
+}
+
+function toggleNewFolder() {
+  const show = folderSelect.value === '__new__';
+  newFolderField.hidden = !show;
+  if (show) newFolderInput.focus();
+  saveSettings();
 }
 
 dropzone.addEventListener('click', () => fileInput.click());
@@ -273,6 +322,13 @@ clearBtn.addEventListener('click', () => {
 uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
 
+  const folder = currentFolder();
+  if (folderSelect.value === '__new__' && !newFolderInput.value.trim()) {
+    alert('새 프로젝트 폴더 이름을 입력해주세요.');
+    newFolderInput.focus();
+    return;
+  }
+
   saveSettings();
   uploadBtn.disabled = true;
   clearBtn.disabled = true;
@@ -285,21 +341,19 @@ uploadBtn.addEventListener('click', async () => {
       const file = selectedFiles[i];
       const base = (i / selectedFiles.length) * 100;
       const span = 100 / selectedFiles.length;
-
       setProgress(base + span * 0.25, `WebP 변환 중 ${i + 1}/${selectedFiles.length} · ${file.name}`);
       const optimized = await optimize(file);
-
       setProgress(base + span * 0.65, `R2 업로드 중 ${i + 1}/${selectedFiles.length} · ${file.name}`);
-      const uploaded = await upload(optimized);
+      const uploaded = await upload(optimized, folder);
       uploadedItems.push(uploaded);
       updateStats();
-
       setProgress(base + span, `완료 ${i + 1}/${selectedFiles.length}`);
     }
 
     setProgress(100, `${uploadedItems.length}개 CDN URL 생성 완료`);
     setStatus('DONE');
     renderResults();
+    await loadFolders(folder);
   } catch (error) {
     console.error(error);
     setStatus('ERROR');
@@ -311,22 +365,27 @@ uploadBtn.addEventListener('click', async () => {
   }
 });
 
+folderSelect.addEventListener('change', toggleNewFolder);
+newFolderInput.addEventListener('input', saveSettings);
+maxWidthInput.addEventListener('change', saveSettings);
+qualityInput.addEventListener('change', saveSettings);
+
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
-  $$('.tab').forEach((item) => item.classList.remove('active'));
+  $$('.tab').forEach((item) => {
+    item.classList.remove('active');
+    item.setAttribute('aria-selected', 'false');
+  });
   tab.classList.add('active');
+  tab.setAttribute('aria-selected', 'true');
   activeTab = tab.dataset.tab;
   codeOutput.textContent = getCode(activeTab);
 }));
 
 copyBtn.addEventListener('click', async () => {
   await navigator.clipboard.writeText(getCode(activeTab));
-  flashButton(copyBtn);
+  flashButton(copyBtn, '복사됨');
 });
 
-[folderInput, maxWidthInput, qualityInput].forEach((input) => {
-  input.addEventListener('change', saveSettings);
-  input.addEventListener('blur', saveSettings);
-});
-
-loadSettings();
+const savedSettings = loadSettings();
+loadFolders(savedSettings.folder || UNCATEGORIZED);
 renderQueue();
