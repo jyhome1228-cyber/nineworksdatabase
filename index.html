@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Nineworks Image Database - drag, optimize, upload, copy code." />
+  <title>NINEWORKS DATABASE</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">NINEWORKS / INTERNAL TOOL</p>
+        <h1>IMAGE DATABASE</h1>
+      </div>
+      <div class="status" id="statusBadge">READY</div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <h2>이미지를 끌어놓으면<br>웹용 코드까지 한 번에.</h2>
+        <p>브라우저에서 WebP로 변환한 뒤 이 GitHub 저장소에 저장하고, GitHub Pages URL과 HTML/CSS 코드를 자동 생성합니다.</p>
+      </div>
+      <div class="stats">
+        <div><strong id="fileCount">0</strong><span>FILES</span></div>
+        <div><strong id="totalBefore">0 MB</strong><span>ORIGINAL</span></div>
+        <div><strong id="totalAfter">0 MB</strong><span>WEBP</span></div>
+      </div>
+    </section>
+
+    <section class="panel settings-panel">
+      <div class="panel-title">
+        <span>01</span>
+        <h3>UPLOAD SETTINGS</h3>
+      </div>
+      <div class="form-grid">
+        <label>
+          <span>Project folder</span>
+          <input id="project" type="text" placeholder="aesost" autocomplete="off" />
+          <small>예: aesost → /images/aesost/</small>
+        </label>
+        <label>
+          <span>GitHub token</span>
+          <input id="token" type="password" placeholder="github_pat_..." autocomplete="off" />
+          <small>이 페이지는 토큰을 저장하지 않습니다.</small>
+        </label>
+        <label>
+          <span>Max width</span>
+          <select id="maxWidth">
+            <option value="1600">1600px</option>
+            <option value="1920">1920px</option>
+            <option value="2400" selected>2400px</option>
+            <option value="3000">3000px</option>
+          </select>
+        </label>
+        <label>
+          <span>WebP quality</span>
+          <select id="quality">
+            <option value="0.72">72 / Small</option>
+            <option value="0.8">80 / Balanced</option>
+            <option value="0.84" selected>84 / Recommended</option>
+            <option value="0.9">90 / High</option>
+          </select>
+        </label>
+      </div>
+      <div class="security-note">
+        테스트용 페이지입니다. Fine-grained PAT를 만들 때 <b>nineworksdatabase 저장소만 선택</b>하고 <b>Contents: Read and write</b> 권한만 주는 방식을 권장합니다.
+      </div>
+    </section>
+
+    <section class="panel upload-panel">
+      <div class="panel-title">
+        <span>02</span>
+        <h3>DROP IMAGES</h3>
+      </div>
+
+      <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
+      <button class="dropzone" id="dropzone" type="button">
+        <span class="drop-icon">+</span>
+        <strong>이미지를 여기에 끌어다 놓으세요</strong>
+        <span>또는 클릭하여 선택 · JPG / PNG / WEBP · 한 번에 최대 50장</span>
+      </button>
+
+      <div id="queue" class="queue empty">
+        <p>선택된 이미지가 없습니다.</p>
+      </div>
+
+      <div class="actions">
+        <button id="clearBtn" class="button secondary" type="button">CLEAR</button>
+        <button id="uploadBtn" class="button primary" type="button" disabled>OPTIMIZE & UPLOAD</button>
+      </div>
+      <div class="progress-wrap" id="progressWrap" hidden>
+        <div class="progress"><span id="progressBar"></span></div>
+        <p id="progressText">Preparing…</p>
+      </div>
+    </section>
+
+    <section class="panel result-panel" id="resultPanel" hidden>
+      <div class="panel-title">
+        <span>03</span>
+        <h3>GENERATED CODE</h3>
+      </div>
+
+      <div class="result-tabs">
+        <button class="tab active" data-tab="url" type="button">URL</button>
+        <button class="tab" data-tab="html" type="button">HTML</button>
+        <button class="tab" data-tab="css" type="button">CSS</button>
+      </div>
+
+      <div class="codebox">
+        <pre id="codeOutput"></pre>
+        <button id="copyBtn" class="copy-button" type="button">COPY ALL</button>
+      </div>
+      <div id="uploadedGrid" class="uploaded-grid"></div>
+    </section>
+
+    <footer>
+      <span>NINEWORKS DATABASE</span>
+      <span>GitHub-backed image utility / test build</span>
+    </footer>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
