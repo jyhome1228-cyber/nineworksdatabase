@@ -2,9 +2,8 @@ const UNCATEGORIZED = 'uncategorized';
 const PAGE_SIZE = 100;
 
 const $ = (s) => document.querySelector(s);
-const $$ = (s) => [...document.querySelectorAll(s)];
 
-const folderSelect = $('#libraryFolder');
+const projectIndex = $('#projectIndex');
 const searchInput = $('#librarySearch');
 const refreshBtn = $('#refreshBtn');
 const statusBadge = $('#statusBadge');
@@ -12,13 +11,14 @@ const assetCount = $('#assetCount');
 const assetSize = $('#assetSize');
 const folderLabel = $('#folderLabel');
 const assetSummary = $('#assetSummary');
-const libraryGrid = $('#libraryGrid');
+const codeList = $('#codeList');
 const emptyLibrary = $('#emptyLibrary');
 const loadMoreBtn = $('#loadMoreBtn');
-const libraryCode = $('#libraryCode');
-const copyFolderBtn = $('#copyFolderBtn');
+const copyAllUrlBtn = $('#copyAllUrlBtn');
+const copyAllHtmlBtn = $('#copyAllHtmlBtn');
+const copyAllCssBtn = $('#copyAllCssBtn');
+const selectAllCheckbox = $('#selectAllCheckbox');
 const selectedCount = $('#selectedCount');
-const selectAllBtn = $('#selectAllBtn');
 const clearSelectionBtn = $('#clearSelectionBtn');
 const deleteSelectedBtn = $('#deleteSelectedBtn');
 const deleteModal = $('#deleteModal');
@@ -27,7 +27,8 @@ const cancelDeleteBtn = $('#cancelDeleteBtn');
 const confirmDeleteBtn = $('#confirmDeleteBtn');
 const toast = $('#toast');
 
-let activeTab = 'url';
+let folders = [UNCATEGORIZED];
+let currentFolderName = UNCATEGORIZED;
 let allItems = [];
 let nextCursor = null;
 let loading = false;
@@ -40,8 +41,7 @@ function formatBytes(bytes) {
   if (!bytes) return '0 MB';
   const kb = bytes / 1024;
   const mb = kb / 1024;
-  if (mb < 0.1) return `${Math.round(kb)} KB`;
-  return `${mb.toFixed(mb >= 10 ? 1 : 2)} MB`;
+  return mb < 0.1 ? `${Math.round(kb)} KB` : `${mb.toFixed(mb >= 10 ? 1 : 2)} MB`;
 }
 
 function formatDate(value) {
@@ -49,11 +49,7 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   }).format(date);
 }
 
@@ -66,68 +62,43 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function setStatus(text) {
-  statusBadge.textContent = text.toUpperCase();
-}
-
-function currentFolder() {
-  return folderSelect.value || UNCATEGORIZED;
-}
-
 function displayFolder(value) {
   return value === UNCATEGORIZED ? '미분류' : value;
 }
 
+function itemName(item) {
+  return item.originalName || item.fileName || item.key.split('/').pop();
+}
+
+function setStatus(text) {
+  statusBadge.textContent = text.toUpperCase();
+}
+
 function filteredItems() {
   const query = searchInput.value.trim().toLowerCase();
-  if (!query) return allItems;
-  return allItems.filter((item) => item.fileName.toLowerCase().includes(query) || item.key.toLowerCase().includes(query));
+  const items = query
+    ? allItems.filter((item) => itemName(item).toLowerCase().includes(query) || item.cdnUrl.toLowerCase().includes(query))
+    : allItems;
+  return [...items].sort((a, b) => new Date(b.uploaded || 0) - new Date(a.uploaded || 0));
 }
 
-function codeFor(items, type) {
-  if (type === 'html') {
-    return items.map((item) => `<img src="${item.cdnUrl}" alt="" loading="lazy">`).join('\n');
-  }
+function codeForItem(item, type) {
+  if (type === 'html') return `<img src="${item.cdnUrl}" alt="" loading="lazy">`;
+  if (type === 'css') return `background-image: url("${item.cdnUrl}");`;
+  return item.cdnUrl;
+}
+
+function codeForItems(items, type) {
   if (type === 'css') {
-    return items.map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.cdnUrl}");\n}`).join('\n\n');
+    return items.map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  ${codeForItem(item, 'css')}\n}`).join('\n\n');
   }
-  return items.map((item) => item.cdnUrl).join('\n');
-}
-
-function updateCode() {
-  const items = filteredItems();
-  libraryCode.textContent = items.length ? codeFor(items, activeTab) : '현재 조건에 맞는 이미지가 없습니다.';
-  copyFolderBtn.disabled = items.length === 0;
-}
-
-function updateStats() {
-  const items = filteredItems();
-  const total = items.reduce((sum, item) => sum + (item.size || 0), 0);
-  assetCount.textContent = items.length;
-  assetSize.textContent = formatBytes(total);
-  folderLabel.textContent = displayFolder(currentFolder());
-  assetSummary.textContent = searchInput.value.trim()
-    ? `${displayFolder(currentFolder())} · 검색 결과 ${items.length}개`
-    : `${displayFolder(currentFolder())} · ${items.length}개 이미지`;
-}
-
-function updateSelectionUI() {
-  const visible = filteredItems();
-  const visibleKeys = visible.map((item) => item.key);
-  const selectedVisible = visibleKeys.filter((key) => selectedKeys.has(key)).length;
-  const allVisibleSelected = visible.length > 0 && selectedVisible === visible.length;
-
-  selectedCount.textContent = `${selectedKeys.size}개 선택`;
-  clearSelectionBtn.disabled = selectedKeys.size === 0;
-  deleteSelectedBtn.disabled = selectedKeys.size === 0;
-  selectAllBtn.disabled = visible.length === 0 || allVisibleSelected;
-  selectAllBtn.textContent = allVisibleSelected ? '현재 목록 선택됨' : '현재 목록 전체 선택';
+  return items.map((item) => codeForItem(item, type)).join('\n');
 }
 
 function flashButton(button, message = '복사됨') {
-  const old = button.textContent;
+  const original = button.textContent;
   button.textContent = message;
-  setTimeout(() => { button.textContent = old; }, 1000);
+  setTimeout(() => { button.textContent = original; }, 900);
 }
 
 function showToast(message, kind = 'success') {
@@ -139,79 +110,7 @@ function showToast(message, kind = 'success') {
   toastTimer = setTimeout(() => {
     toast.classList.remove('show');
     setTimeout(() => { toast.hidden = true; }, 180);
-  }, 2600);
-}
-
-function renderGrid() {
-  const items = filteredItems();
-  const existingKeys = new Set(allItems.map((item) => item.key));
-  selectedKeys = new Set([...selectedKeys].filter((key) => existingKeys.has(key)));
-
-  libraryGrid.innerHTML = '';
-  emptyLibrary.hidden = items.length !== 0 || loading;
-
-  items.forEach((item) => {
-    const card = document.createElement('article');
-    card.className = `library-card${selectedKeys.has(item.key) ? ' selected' : ''}`;
-    card.dataset.key = item.key;
-    card.innerHTML = `
-      <div class="library-card-image">
-        <label class="asset-select" title="선택">
-          <input class="asset-checkbox" type="checkbox" ${selectedKeys.has(item.key) ? 'checked' : ''} aria-label="${escapeHtml(item.fileName)} 선택">
-          <span aria-hidden="true"></span>
-        </label>
-        <img src="${item.cdnUrl}" alt="" loading="lazy">
-      </div>
-      <div class="library-card-body">
-        <strong class="library-card-title" title="${escapeHtml(item.fileName)}">${escapeHtml(item.fileName)}</strong>
-        <div class="library-card-meta">
-          <span>${formatBytes(item.size)}</span>
-          <span>${escapeHtml(formatDate(item.uploaded))}</span>
-        </div>
-        <div class="url-line" title="${escapeHtml(item.cdnUrl)}">${escapeHtml(item.cdnUrl)}</div>
-        <div class="card-actions">
-          <button class="mini copy-url" type="button">URL 복사</button>
-          <button class="mini copy-html" type="button">HTML 복사</button>
-          <button class="mini copy-css" type="button">CSS 복사</button>
-          <a class="mini" href="${item.cdnUrl}" target="_blank" rel="noreferrer">열기</a>
-          <button class="mini mini-critical delete-one" type="button">삭제</button>
-        </div>
-      </div>`;
-
-    const checkbox = card.querySelector('.asset-checkbox');
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) selectedKeys.add(item.key);
-      else selectedKeys.delete(item.key);
-      card.classList.toggle('selected', checkbox.checked);
-      updateSelectionUI();
-    });
-
-    card.querySelector('.copy-url').addEventListener('click', async (event) => {
-      await navigator.clipboard.writeText(item.cdnUrl);
-      flashButton(event.currentTarget);
-    });
-
-    card.querySelector('.copy-html').addEventListener('click', async (event) => {
-      await navigator.clipboard.writeText(`<img src="${item.cdnUrl}" alt="" loading="lazy">`);
-      flashButton(event.currentTarget);
-    });
-
-    card.querySelector('.copy-css').addEventListener('click', async (event) => {
-      await navigator.clipboard.writeText(`background-image: url("${item.cdnUrl}");`);
-      flashButton(event.currentTarget);
-    });
-
-    card.querySelector('.delete-one').addEventListener('click', (event) => {
-      requestDelete([item.key], item.fileName, event.currentTarget);
-    });
-
-    libraryGrid.appendChild(card);
-  });
-
-  updateStats();
-  updateCode();
-  updateSelectionUI();
-  loadMoreBtn.hidden = !nextCursor || searchInput.value.trim().length > 0;
+  }, 2400);
 }
 
 function updateFolderUrl(folder) {
@@ -220,28 +119,140 @@ function updateFolderUrl(folder) {
   history.replaceState({}, '', url);
 }
 
+function renderProjectIndex() {
+  projectIndex.innerHTML = '';
+  folders.forEach((folder, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `project-index-item${folder === currentFolderName ? ' active' : ''}`;
+    button.dataset.folder = folder;
+    button.innerHTML = `
+      <span class="project-index-number">${String(index + 1).padStart(2, '0')}</span>
+      <span class="project-index-name">${escapeHtml(displayFolder(folder))}</span>`;
+    button.addEventListener('click', async () => {
+      if (folder === currentFolderName) return;
+      currentFolderName = folder;
+      updateFolderUrl(folder);
+      searchInput.value = '';
+      selectedKeys.clear();
+      renderProjectIndex();
+      await loadAssets();
+    });
+    projectIndex.appendChild(button);
+  });
+}
+
 async function loadFolders(preferred) {
-  const requested = preferred || new URLSearchParams(location.search).get('folder') || currentFolder();
+  const requested = preferred || new URLSearchParams(location.search).get('folder') || currentFolderName;
   try {
     const response = await fetch('/api/folders', { cache: 'no-store' });
     const data = await response.json();
-    if (!response.ok || !Array.isArray(data.folders)) return currentFolder();
+    if (response.ok && Array.isArray(data.folders) && data.folders.length) {
+      folders = data.folders;
+    } else {
+      folders = [UNCATEGORIZED];
+    }
+  } catch {
+    folders = [UNCATEGORIZED];
+  }
 
-    folderSelect.innerHTML = '';
-    data.folders.forEach((folder) => {
-      const option = document.createElement('option');
-      option.value = folder;
-      option.textContent = displayFolder(folder);
-      folderSelect.appendChild(option);
+  currentFolderName = folders.includes(requested) ? requested : (folders.includes(UNCATEGORIZED) ? UNCATEGORIZED : folders[0]);
+  updateFolderUrl(currentFolderName);
+  renderProjectIndex();
+  return currentFolderName;
+}
+
+function updateStats() {
+  const items = filteredItems();
+  assetCount.textContent = items.length;
+  assetSize.textContent = formatBytes(items.reduce((sum, item) => sum + (item.size || 0), 0));
+  folderLabel.textContent = displayFolder(currentFolderName);
+  assetSummary.textContent = searchInput.value.trim()
+    ? `${items.length}개 검색됨`
+    : `${items.length}개의 코드 기록`;
+}
+
+function updateSelectionUI() {
+  const visible = filteredItems();
+  const selectedVisible = visible.filter((item) => selectedKeys.has(item.key)).length;
+  const allSelected = visible.length > 0 && selectedVisible === visible.length;
+
+  selectedCount.textContent = `${selectedKeys.size}개 선택`;
+  selectAllCheckbox.checked = allSelected;
+  selectAllCheckbox.disabled = visible.length === 0;
+  clearSelectionBtn.disabled = selectedKeys.size === 0;
+  deleteSelectedBtn.disabled = selectedKeys.size === 0;
+}
+
+function renderList() {
+  const items = filteredItems();
+  const known = new Set(allItems.map((item) => item.key));
+  selectedKeys = new Set([...selectedKeys].filter((key) => known.has(key)));
+
+  codeList.innerHTML = '';
+  emptyLibrary.hidden = items.length !== 0 || loading;
+
+  items.forEach((item, index) => {
+    const row = document.createElement('article');
+    row.className = `code-row${selectedKeys.has(item.key) ? ' selected' : ''}`;
+    row.dataset.key = item.key;
+    const name = itemName(item);
+
+    row.innerHTML = `
+      <label class="row-select">
+        <input class="row-checkbox" type="checkbox" ${selectedKeys.has(item.key) ? 'checked' : ''} aria-label="${escapeHtml(name)} 선택">
+        <span aria-hidden="true"></span>
+      </label>
+      <div class="row-index">${String(index + 1).padStart(3, '0')}</div>
+      <div class="row-main">
+        <div class="row-title-line">
+          <strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong>
+          <span>${escapeHtml(formatDate(item.uploaded))}</span>
+        </div>
+        <code class="row-code" title="${escapeHtml(item.cdnUrl)}">${escapeHtml(item.cdnUrl)}</code>
+        <div class="row-meta">${formatBytes(item.size)} · ${escapeHtml(displayFolder(currentFolderName))}</div>
+      </div>
+      <div class="row-actions">
+        <button class="row-action copy-url" type="button">URL</button>
+        <button class="row-action copy-html" type="button">HTML</button>
+        <button class="row-action copy-css" type="button">CSS</button>
+        <a class="row-action" href="${item.cdnUrl}" target="_blank" rel="noreferrer">열기</a>
+        <button class="row-action danger delete-one" type="button">삭제</button>
+      </div>`;
+
+    const checkbox = row.querySelector('.row-checkbox');
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedKeys.add(item.key);
+      else selectedKeys.delete(item.key);
+      row.classList.toggle('selected', checkbox.checked);
+      updateSelectionUI();
     });
 
-    const hasRequested = [...folderSelect.options].some((option) => option.value === requested);
-    folderSelect.value = hasRequested ? requested : UNCATEGORIZED;
-    updateFolderUrl(folderSelect.value);
-    return folderSelect.value;
-  } catch {
-    return currentFolder();
-  }
+    row.querySelector('.copy-url').addEventListener('click', async (event) => {
+      await navigator.clipboard.writeText(codeForItem(item, 'url'));
+      flashButton(event.currentTarget);
+    });
+    row.querySelector('.copy-html').addEventListener('click', async (event) => {
+      await navigator.clipboard.writeText(codeForItem(item, 'html'));
+      flashButton(event.currentTarget);
+    });
+    row.querySelector('.copy-css').addEventListener('click', async (event) => {
+      await navigator.clipboard.writeText(codeForItem(item, 'css'));
+      flashButton(event.currentTarget);
+    });
+    row.querySelector('.delete-one').addEventListener('click', (event) => {
+      requestDelete([item.key], name, event.currentTarget);
+    });
+
+    codeList.appendChild(row);
+  });
+
+  updateStats();
+  updateSelectionUI();
+  loadMoreBtn.hidden = !nextCursor || searchInput.value.trim().length > 0;
+
+  const hasItems = items.length > 0;
+  [copyAllUrlBtn, copyAllHtmlBtn, copyAllCssBtn].forEach((button) => { button.disabled = !hasItems; });
 }
 
 async function loadAssets({ append = false } = {}) {
@@ -255,18 +266,16 @@ async function loadAssets({ append = false } = {}) {
     allItems = [];
     nextCursor = null;
     selectedKeys.clear();
-    libraryGrid.innerHTML = '<div class="library-loading">이미지를 불러오는 중입니다.</div>';
+    codeList.innerHTML = '<div class="library-loading">코드 기록을 불러오는 중입니다.</div>';
     emptyLibrary.hidden = true;
-    updateSelectionUI();
   }
 
   try {
-    const params = new URLSearchParams({ folder: currentFolder(), limit: String(PAGE_SIZE) });
+    const params = new URLSearchParams({ folder: currentFolderName, limit: String(PAGE_SIZE) });
     if (append && nextCursor) params.set('cursor', nextCursor);
-
     const response = await fetch(`/api/assets?${params.toString()}`, { cache: 'no-store' });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || '라이브러리를 불러오지 못했습니다.');
+    if (!response.ok) throw new Error(data.message || '코드 기록을 불러오지 못했습니다.');
 
     const incoming = Array.isArray(data.items) ? data.items : [];
     allItems = append ? [...allItems, ...incoming] : incoming;
@@ -274,29 +283,25 @@ async function loadAssets({ append = false } = {}) {
     setStatus('READY');
   } catch (error) {
     console.error(error);
-    setStatus('ERROR');
-    assetSummary.textContent = error.message;
     allItems = [];
     nextCursor = null;
+    setStatus('ERROR');
     showToast(error.message, 'error');
   } finally {
     loading = false;
     refreshBtn.disabled = false;
     loadMoreBtn.disabled = false;
-    renderGrid();
+    renderList();
   }
 }
 
 function requestDelete(keys, label, trigger) {
   const uniqueKeys = [...new Set(keys)].filter(Boolean);
   if (!uniqueKeys.length) return;
-
   pendingDeleteKeys = uniqueKeys;
   lastFocusedElement = trigger || document.activeElement;
-  deleteSummary.textContent = uniqueKeys.length === 1
-    ? label || uniqueKeys[0].split('/').pop()
-    : `${uniqueKeys.length}개 이미지가 선택되었습니다.`;
-  confirmDeleteBtn.textContent = uniqueKeys.length === 1 ? '이미지 삭제' : `${uniqueKeys.length}개 삭제`;
+  deleteSummary.textContent = uniqueKeys.length === 1 ? label : `${uniqueKeys.length}개 기록`;
+  confirmDeleteBtn.textContent = uniqueKeys.length === 1 ? '삭제' : `${uniqueKeys.length}개 삭제`;
   deleteModal.hidden = false;
   document.body.classList.add('modal-open');
   setTimeout(() => cancelDeleteBtn.focus(), 20);
@@ -326,15 +331,13 @@ async function performDelete() {
       body: JSON.stringify({ keys })
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || '이미지를 삭제하지 못했습니다.');
+    if (!response.ok) throw new Error(data.message || '삭제하지 못했습니다.');
 
     selectedKeys.clear();
     closeDeleteModal();
-    showToast(`${data.deleted || keys.length}개 이미지가 삭제되었습니다.`);
-
-    const previousFolder = currentFolder();
-    const targetFolder = await loadFolders(previousFolder);
-    if (targetFolder !== previousFolder) searchInput.value = '';
+    showToast(`${data.deleted || keys.length}개 기록이 삭제되었습니다.`);
+    const previousFolder = currentFolderName;
+    await loadFolders(previousFolder);
     await loadAssets();
   } catch (error) {
     console.error(error);
@@ -347,67 +350,55 @@ async function performDelete() {
   }
 }
 
-folderSelect.addEventListener('change', () => {
-  updateFolderUrl(currentFolder());
-  searchInput.value = '';
-  selectedKeys.clear();
-  loadAssets();
-});
+function bindCopyAll(button, type) {
+  button.addEventListener('click', async () => {
+    const items = filteredItems();
+    if (!items.length) return;
+    await navigator.clipboard.writeText(codeForItems(items, type));
+    flashButton(button);
+  });
+}
 
 searchInput.addEventListener('input', () => {
   selectedKeys.clear();
-  renderGrid();
+  renderList();
 });
 
-refreshBtn.addEventListener('click', () => {
+refreshBtn.addEventListener('click', async () => {
   selectedKeys.clear();
-  loadAssets();
+  await loadFolders(currentFolderName);
+  await loadAssets();
 });
 
 loadMoreBtn.addEventListener('click', () => loadAssets({ append: true }));
 
-selectAllBtn.addEventListener('click', () => {
-  filteredItems().forEach((item) => selectedKeys.add(item.key));
-  renderGrid();
+selectAllCheckbox.addEventListener('change', () => {
+  if (selectAllCheckbox.checked) filteredItems().forEach((item) => selectedKeys.add(item.key));
+  else filteredItems().forEach((item) => selectedKeys.delete(item.key));
+  renderList();
 });
 
 clearSelectionBtn.addEventListener('click', () => {
   selectedKeys.clear();
-  renderGrid();
+  renderList();
 });
 
 deleteSelectedBtn.addEventListener('click', (event) => {
-  requestDelete([...selectedKeys], `${selectedKeys.size}개 이미지`, event.currentTarget);
+  requestDelete([...selectedKeys], `${selectedKeys.size}개 기록`, event.currentTarget);
 });
 
 cancelDeleteBtn.addEventListener('click', closeDeleteModal);
 confirmDeleteBtn.addEventListener('click', performDelete);
-
 deleteModal.addEventListener('click', (event) => {
   if (event.target === deleteModal) closeDeleteModal();
 });
-
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !deleteModal.hidden) closeDeleteModal();
 });
 
-$$('.tab').forEach((tab) => tab.addEventListener('click', () => {
-  $$('.tab').forEach((item) => {
-    item.classList.remove('active');
-    item.setAttribute('aria-selected', 'false');
-  });
-  tab.classList.add('active');
-  tab.setAttribute('aria-selected', 'true');
-  activeTab = tab.dataset.tab;
-  updateCode();
-}));
-
-copyFolderBtn.addEventListener('click', async () => {
-  const items = filteredItems();
-  if (!items.length) return;
-  await navigator.clipboard.writeText(codeFor(items, activeTab));
-  flashButton(copyFolderBtn);
-});
+bindCopyAll(copyAllUrlBtn, 'url');
+bindCopyAll(copyAllHtmlBtn, 'html');
+bindCopyAll(copyAllCssBtn, 'css');
 
 (async function init() {
   await loadFolders();
