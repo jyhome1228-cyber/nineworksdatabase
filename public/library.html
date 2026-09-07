@@ -3,134 +3,161 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Nineworks R2 project image library and CDN code browser">
+  <meta name="description" content="Nineworks R2 project asset library">
   <title>NINEWORKS ASSET LIBRARY</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./library.css">
 </head>
 <body>
+  <div class="system-grid" aria-hidden="true"></div>
+  <div class="code-stream" aria-hidden="true">
+    <span>bucket.list prefix=project/</span>
+    <span>object.metadata → loaded</span>
+    <span>cdn.edge cache=immutable</span>
+    <span>library.index synced</span>
+    <span>delete.batch max=100</span>
+    <span>r2.objects enumerate</span>
+    <span>selection.state mutable</span>
+    <span>worker.status ready</span>
+  </div>
+
   <main class="page-shell">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">NINEWORKS / ASSET DATABASE</p>
-        <h1>IMAGE LIBRARY</h1>
+    <header class="app-header console-header">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true">NW</span>
+        <div>
+          <p class="eyebrow">NINEWORKS / INTERNAL TOOL</p>
+          <h1>ASSET CONSOLE</h1>
+        </div>
       </div>
       <div class="header-actions">
         <nav class="app-nav" aria-label="Asset navigation">
           <a class="nav-link" href="./">UPLOAD</a>
           <a class="nav-link active" href="./library.html" aria-current="page">LIBRARY</a>
         </nav>
-        <div class="status" id="statusBadge" aria-live="polite">READY</div>
+        <div class="status" id="statusBadge" aria-live="polite"><i></i>READY</div>
       </div>
     </header>
 
-    <section class="hero-section library-hero" aria-labelledby="page-title">
-      <div class="hero-copy">
-        <h2 id="page-title">프로젝트별 이미지와<br>코드를 한 곳에서.</h2>
-        <p>R2에 저장된 이미지를 프로젝트 폴더 기준으로 모아보고, 필요한 CDN URL · HTML · CSS 코드를 다시 복사하거나 더 이상 쓰지 않는 파일을 정리할 수 있습니다.</p>
+    <section class="console-overview library-overview" aria-labelledby="page-title">
+      <div class="overview-copy">
+        <div class="console-kicker"><span>02</span> OBJECT DATABASE</div>
+        <h2 id="page-title">ASSET LIBRARY</h2>
+        <p>프로젝트 prefix 기준으로 R2 오브젝트를 조회하고 CDN URL, HTML, CSS 코드를 재사용하거나 더 이상 필요 없는 파일을 정리합니다.</p>
       </div>
-      <dl class="stats" aria-label="라이브러리 통계">
-        <div><dt>FILES</dt><dd id="assetCount">0</dd></div>
-        <div><dt>SIZE</dt><dd id="assetSize">0 MB</dd></div>
-        <div><dt>FOLDER</dt><dd id="folderLabel">미분류</dd></div>
-      </dl>
-    </section>
-
-    <section class="section-block" aria-labelledby="filter-title">
-      <div class="section-heading">
-        <span class="section-index">01</span>
-        <div>
-          <h3 id="filter-title">BROWSE LIBRARY</h3>
-          <p>프로젝트 폴더를 선택하고 필요한 이미지를 찾습니다.</p>
-        </div>
-      </div>
-
-      <div class="library-toolbar">
-        <div class="field">
-          <label for="libraryFolder">Project folder</label>
-          <select id="libraryFolder">
-            <option value="uncategorized">미분류</option>
-          </select>
-        </div>
-        <div class="field library-search-field">
-          <label for="librarySearch">Search</label>
-          <input id="librarySearch" type="search" placeholder="파일명 검색" autocomplete="off">
-        </div>
-        <div class="library-refresh-wrap">
-          <button id="refreshBtn" class="button button-secondary" type="button">새로고침</button>
-        </div>
+      <div class="environment-panel" aria-label="Library environment">
+        <div class="env-row"><span>SOURCE</span><strong>R2 OBJECT STORE</strong></div>
+        <div class="env-row"><span>BUCKET</span><strong>nineworks-assets</strong></div>
+        <div class="env-row"><span>MODE</span><strong>READ / DELETE</strong></div>
+        <div class="env-row"><span>DELIVERY</span><strong>WORKERS CDN</strong></div>
       </div>
     </section>
 
-    <section class="section-block" aria-labelledby="code-title">
-      <div class="section-heading">
-        <span class="section-index">02</span>
-        <div>
-          <h3 id="code-title">FOLDER CODE</h3>
-          <p>현재 선택한 폴더의 검색 결과를 코드 형식별로 한 번에 복사합니다.</p>
-        </div>
-      </div>
+    <dl class="metric-strip" aria-label="라이브러리 통계">
+      <div><dt>VISIBLE FILES</dt><dd id="assetCount">0</dd></div>
+      <div><dt>TOTAL SIZE</dt><dd id="assetSize">0 MB</dd></div>
+      <div><dt>ACTIVE FOLDER</dt><dd id="folderLabel">미분류</dd></div>
+      <div class="metric-runtime"><dt>DATABASE</dt><dd><span class="online-dot"></span>CONNECTED</dd></div>
+    </dl>
 
-      <div class="tabs" role="tablist" aria-label="코드 형식">
-        <button class="tab active" data-tab="url" role="tab" aria-selected="true" type="button">CDN URL</button>
-        <button class="tab" data-tab="html" role="tab" aria-selected="false" type="button">HTML</button>
-        <button class="tab" data-tab="css" role="tab" aria-selected="false" type="button">CSS</button>
-      </div>
-      <div class="codebox library-codebox">
-        <pre id="libraryCode">이미지를 불러오면 코드가 표시됩니다.</pre>
-        <button id="copyFolderBtn" class="copy-button" type="button">전체 복사</button>
-      </div>
-    </section>
-
-    <section class="section-block" aria-labelledby="assets-title">
-      <div class="section-heading library-heading-row">
-        <div class="library-heading-left">
-          <span class="section-index">03</span>
+    <div class="library-console-grid">
+      <section class="section-block console-panel browse-panel" aria-labelledby="filter-title">
+        <div class="panel-bar">
           <div>
-            <h3 id="assets-title">ASSETS</h3>
-            <p id="assetSummary">이미지를 불러오는 중입니다.</p>
+            <span class="panel-code">QUERY/01</span>
+            <h3 id="filter-title">BROWSE OBJECTS</h3>
+          </div>
+          <span class="panel-state">LIVE R2</span>
+        </div>
+
+        <div class="library-toolbar">
+          <div class="field">
+            <label for="libraryFolder">PROJECT FOLDER</label>
+            <select id="libraryFolder">
+              <option value="uncategorized">미분류</option>
+            </select>
+          </div>
+          <div class="field library-search-field">
+            <label for="librarySearch">SEARCH OBJECT</label>
+            <input id="librarySearch" type="search" placeholder="filename.webp" autocomplete="off">
+          </div>
+          <div class="library-refresh-wrap">
+            <button id="refreshBtn" class="button button-secondary" type="button">REFRESH</button>
           </div>
         </div>
+      </section>
+
+      <section class="section-block console-panel code-panel" aria-labelledby="code-title">
+        <div class="panel-bar">
+          <div>
+            <span class="panel-code">EXPORT/02</span>
+            <h3 id="code-title">FOLDER CODE</h3>
+          </div>
+          <span class="panel-state">GENERATED</span>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="코드 형식">
+          <button class="tab active" data-tab="url" role="tab" aria-selected="true" type="button">CDN URL</button>
+          <button class="tab" data-tab="html" role="tab" aria-selected="false" type="button">HTML</button>
+          <button class="tab" data-tab="css" role="tab" aria-selected="false" type="button">CSS</button>
+        </div>
+        <div class="codebox library-codebox terminal-box">
+          <div class="terminal-title"><span></span><span></span><span></span><code>folder-output.log</code></div>
+          <pre id="libraryCode">Waiting for object query...</pre>
+          <button id="copyFolderBtn" class="copy-button" type="button">COPY ALL</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="section-block console-panel assets-panel" aria-labelledby="assets-title">
+      <div class="panel-bar assets-panel-bar">
+        <div>
+          <span class="panel-code">OBJECTS/03</span>
+          <h3 id="assets-title">STORED ASSETS</h3>
+          <p id="assetSummary">R2 object list를 불러오는 중입니다.</p>
+        </div>
+        <span class="panel-state">OBJECT VIEW</span>
       </div>
 
       <div class="selection-toolbar" id="selectionToolbar">
         <div class="selection-info">
           <strong id="selectedCount">0개 선택</strong>
-          <span>현재 불러온 이미지에서 선택해 삭제할 수 있습니다.</span>
+          <span>선택한 오브젝트는 R2에서 영구 삭제할 수 있습니다.</span>
         </div>
         <div class="selection-actions">
-          <button id="selectAllBtn" class="button button-secondary" type="button">현재 목록 전체 선택</button>
-          <button id="clearSelectionBtn" class="button button-secondary" type="button" disabled>선택 해제</button>
-          <button id="deleteSelectedBtn" class="button button-critical" type="button" disabled>선택 삭제</button>
+          <button id="selectAllBtn" class="button button-secondary" type="button">SELECT ALL</button>
+          <button id="clearSelectionBtn" class="button button-secondary" type="button" disabled>CLEAR</button>
+          <button id="deleteSelectedBtn" class="button button-critical" type="button" disabled>DELETE SELECTED</button>
         </div>
       </div>
 
       <div id="libraryGrid" class="library-grid" aria-live="polite"></div>
       <div id="emptyLibrary" class="library-empty" hidden>
+        <code>NO_OBJECTS_FOUND</code>
         <strong>이 폴더에는 아직 이미지가 없습니다.</strong>
-        <p>Upload 페이지에서 이미지를 추가하면 여기에 자동으로 표시됩니다.</p>
-        <a class="button button-primary empty-upload-link" href="./">이미지 업로드</a>
+        <p>Upload에서 이미지를 추가하면 R2 object가 여기에 표시됩니다.</p>
+        <a class="button button-primary empty-upload-link" href="./">OPEN UPLOAD</a>
       </div>
       <div class="load-more-row">
-        <button id="loadMoreBtn" class="button button-secondary" type="button" hidden>더 보기</button>
+        <button id="loadMoreBtn" class="button button-secondary" type="button" hidden>LOAD MORE</button>
       </div>
     </section>
 
-    <footer class="app-footer">
-      <span>NINEWORKS ASSET DATABASE</span>
-      <span>CLOUDFLARE R2 · LIBRARY</span>
+    <footer class="app-footer console-footer">
+      <span>NINEWORKS ASSET CONSOLE / LIBRARY</span>
+      <span>R2 OBJECT DATABASE · EDGE DELIVERY</span>
     </footer>
   </main>
 
   <div id="deleteModal" class="modal-backdrop" hidden>
     <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle" aria-describedby="deleteModalDescription">
-      <p class="eyebrow">DELETE ASSET</p>
-      <h2 id="deleteModalTitle">이미지를 삭제할까요?</h2>
-      <p id="deleteModalDescription">삭제한 파일은 R2에서 제거되며 복구할 수 없습니다.</p>
+      <p class="eyebrow">DESTRUCTIVE OPERATION</p>
+      <h2 id="deleteModalTitle">R2 오브젝트를 삭제할까요?</h2>
+      <p id="deleteModalDescription">삭제된 파일은 R2에서 영구 제거되며 복구할 수 없습니다.</p>
       <div class="delete-summary" id="deleteSummary"></div>
       <div class="modal-actions">
-        <button id="cancelDeleteBtn" class="button button-secondary" type="button">취소</button>
-        <button id="confirmDeleteBtn" class="button button-critical" type="button">삭제</button>
+        <button id="cancelDeleteBtn" class="button button-secondary" type="button">CANCEL</button>
+        <button id="confirmDeleteBtn" class="button button-critical" type="button">DELETE OBJECT</button>
       </div>
     </div>
   </div>
