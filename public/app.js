@@ -1,4 +1,5 @@
 const MAX_FILES = 20;
+const SETTINGS_KEY = 'nineworks-r2-settings';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 
@@ -40,6 +41,23 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function loadSettings() {
+  try {
+    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    if (settings.folder) folderInput.value = settings.folder;
+    if (settings.maxWidth) maxWidthInput.value = settings.maxWidth;
+    if (settings.quality) qualityInput.value = settings.quality;
+  } catch {}
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    folder: folderInput.value.trim(),
+    maxWidth: maxWidthInput.value,
+    quality: qualityInput.value
+  }));
 }
 
 function setStatus(text) {
@@ -93,13 +111,21 @@ function addFiles(fileList) {
   }
 
   const space = MAX_FILES - selectedFiles.length;
-  if (space <= 0) return;
+  if (space <= 0) {
+    alert(`한 번에 최대 ${MAX_FILES}장까지 업로드할 수 있습니다.`);
+    return;
+  }
+
   selectedFiles = [...selectedFiles, ...incoming.slice(0, space)];
   uploadedItems = [];
   resultPanel.hidden = true;
   progressWrap.hidden = true;
   setStatus('READY');
   renderQueue();
+
+  if (incoming.length > space) {
+    alert(`최대 ${MAX_FILES}장까지만 추가했습니다.`);
+  }
 }
 
 function loadImage(file) {
@@ -120,7 +146,11 @@ function loadImage(file) {
 
 function canvasToBlob(canvas, quality) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('WebP 변환에 실패했습니다.')), 'image/webp', quality);
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('WebP 변환에 실패했습니다.')),
+      'image/webp',
+      quality
+    );
   });
 }
 
@@ -148,7 +178,7 @@ async function upload(item) {
   const form = new FormData();
   form.append('file', item.blob, item.original.name.replace(/\.[^/.]+$/, '') + '.webp');
   form.append('name', item.original.name);
-  form.append('folder', folderInput.value.trim() || 'test');
+  form.append('folder', folderInput.value.trim() || 'uploads');
 
   const response = await fetch('/api/upload', { method: 'POST', body: form });
   const data = await response.json().catch(() => ({}));
@@ -164,6 +194,12 @@ function getCode(type) {
     return uploadedItems.map((item, index) => `.image-${String(index + 1).padStart(2, '0')} {\n  background-image: url("${item.cdnUrl}");\n}`).join('\n\n');
   }
   return uploadedItems.map((item) => item.cdnUrl).join('\n');
+}
+
+function flashButton(button, text = 'COPIED') {
+  const old = button.textContent;
+  button.textContent = text;
+  setTimeout(() => { button.textContent = old; }, 1000);
 }
 
 function renderResults() {
@@ -188,10 +224,23 @@ function renderResults() {
         </div>
       </div>`;
 
-    card.querySelector('.copy-url').addEventListener('click', () => navigator.clipboard.writeText(item.cdnUrl));
-    card.querySelector('.copy-html').addEventListener('click', () => navigator.clipboard.writeText(`<img src="${item.cdnUrl}" alt="" loading="lazy">`));
+    const urlButton = card.querySelector('.copy-url');
+    const htmlButton = card.querySelector('.copy-html');
+
+    urlButton.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(item.cdnUrl);
+      flashButton(urlButton);
+    });
+
+    htmlButton.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(`<img src="${item.cdnUrl}" alt="" loading="lazy">`);
+      flashButton(htmlButton);
+    });
+
     uploadedGrid.appendChild(card);
   });
+
+  resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 dropzone.addEventListener('click', () => fileInput.click());
@@ -223,6 +272,8 @@ clearBtn.addEventListener('click', () => {
 
 uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
+
+  saveSettings();
   uploadBtn.disabled = true;
   clearBtn.disabled = true;
   uploadedItems = [];
@@ -234,12 +285,15 @@ uploadBtn.addEventListener('click', async () => {
       const file = selectedFiles[i];
       const base = (i / selectedFiles.length) * 100;
       const span = 100 / selectedFiles.length;
+
       setProgress(base + span * 0.25, `WebP 변환 중 ${i + 1}/${selectedFiles.length} · ${file.name}`);
       const optimized = await optimize(file);
+
       setProgress(base + span * 0.65, `R2 업로드 중 ${i + 1}/${selectedFiles.length} · ${file.name}`);
       const uploaded = await upload(optimized);
       uploadedItems.push(uploaded);
       updateStats();
+
       setProgress(base + span, `완료 ${i + 1}/${selectedFiles.length}`);
     }
 
@@ -266,9 +320,13 @@ $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
 
 copyBtn.addEventListener('click', async () => {
   await navigator.clipboard.writeText(getCode(activeTab));
-  const old = copyBtn.textContent;
-  copyBtn.textContent = 'COPIED';
-  setTimeout(() => { copyBtn.textContent = old; }, 1000);
+  flashButton(copyBtn);
 });
 
+[folderInput, maxWidthInput, qualityInput].forEach((input) => {
+  input.addEventListener('change', saveSettings);
+  input.addEventListener('blur', saveSettings);
+});
+
+loadSettings();
 renderQueue();
