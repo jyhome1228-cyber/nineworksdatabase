@@ -1,6 +1,15 @@
 (() => {
   const KEY = 'nineworks_asset_console_booted_v1';
   const TARGET_MS = 1800;
+
+  if (!document.querySelector('link[data-nw-refine]')) {
+    const refine = document.createElement('link');
+    refine.rel = 'stylesheet';
+    refine.href = './refine.css';
+    refine.dataset.nwRefine = '1';
+    document.head.appendChild(refine);
+  }
+
   const params = new URLSearchParams(location.search);
   const force = params.get('boot') === '1';
 
