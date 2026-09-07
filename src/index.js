@@ -88,11 +88,49 @@ async function listFolders(env) {
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
 
-  return Response.json({ ok: true, folders: [...folders].sort((a, b) => {
-    if (a === 'uncategorized') return -1;
-    if (b === 'uncategorized') return 1;
-    return a.localeCompare(b);
-  }) });
+  return Response.json({
+    ok: true,
+    folders: [...folders].sort((a, b) => {
+      if (a === 'uncategorized') return -1;
+      if (b === 'uncategorized') return 1;
+      return a.localeCompare(b);
+    })
+  });
+}
+
+async function listAssets(request, env) {
+  const url = new URL(request.url);
+  const folder = cleanSegment(url.searchParams.get('folder') || 'uncategorized', 'uncategorized');
+  const cursor = url.searchParams.get('cursor') || undefined;
+  const requestedLimit = Number(url.searchParams.get('limit') || 100);
+  const limit = Math.max(1, Math.min(1000, Number.isFinite(requestedLimit) ? requestedLimit : 100));
+  const prefix = `${folder}/`;
+
+  const page = await env.IMAGE_BUCKET.list({
+    prefix,
+    cursor,
+    limit,
+    include: ['httpMetadata', 'customMetadata']
+  });
+
+  const items = (page.objects || []).map((object) => ({
+    key: object.key,
+    folder,
+    fileName: object.key.slice(prefix.length),
+    size: object.size || 0,
+    uploaded: object.uploaded instanceof Date ? object.uploaded.toISOString() : object.uploaded || null,
+    etag: object.httpEtag || object.etag || null,
+    originalName: object.customMetadata?.originalName || null,
+    cdnUrl: objectUrl(url.origin, object.key)
+  }));
+
+  return Response.json({
+    ok: true,
+    folder,
+    items,
+    truncated: Boolean(page.truncated),
+    cursor: page.truncated ? page.cursor : null
+  });
 }
 
 async function serveImage(request, env) {
@@ -123,6 +161,10 @@ export default {
 
     if (url.pathname === '/api/folders' && request.method === 'GET') {
       return listFolders(env);
+    }
+
+    if (url.pathname === '/api/assets' && request.method === 'GET') {
+      return listAssets(request, env);
     }
 
     if (url.pathname.startsWith('/cdn/') && (request.method === 'GET' || request.method === 'HEAD')) {
