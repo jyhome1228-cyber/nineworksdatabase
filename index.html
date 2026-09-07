@@ -3,30 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Nineworks Image Database - drag, optimize, upload, copy code." />
-  <title>NINEWORKS DATABASE</title>
+  <meta name="description" content="Nineworks image to code test utility." />
+  <title>NINEWORKS IMAGE CODE TEST</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">NINEWORKS / INTERNAL TOOL</p>
-        <h1>IMAGE DATABASE</h1>
+        <p class="eyebrow">NINEWORKS / TEST TOOL</p>
+        <h1>IMAGE → CODE</h1>
       </div>
-      <div class="top-actions">
-        <button class="connection" id="connectBtn" type="button">
-          <span class="connection-dot"></span>
-          <span id="connectionText">CHECKING</span>
-        </button>
-        <div class="status" id="statusBadge">READY</div>
-      </div>
+      <div class="status" id="statusBadge">READY</div>
     </header>
 
     <section class="intro">
       <div>
-        <h2>이미지를 끌어놓으면<br>웹용 코드까지 한 번에.</h2>
-        <p>이미지는 브라우저에서 WebP로 최적화되고 Nineworks GitHub 이미지 저장소에 자동 저장됩니다. GitHub 토큰을 직접 입력할 필요가 없습니다.</p>
+        <h2>이미지를 올리고<br>코드로 바로 변환.</h2>
+        <p>GitHub 저장이나 로그인 없이 브라우저에서 이미지를 WebP로 변환하고 Base64 · HTML · CSS 코드를 바로 생성하는 테스트 페이지입니다.</p>
       </div>
       <div class="stats">
         <div><strong id="fileCount">0</strong><span>FILES</span></div>
@@ -38,14 +32,9 @@
     <section class="panel settings-panel">
       <div class="panel-title">
         <span>01</span>
-        <h3>UPLOAD SETTINGS</h3>
+        <h3>CONVERT SETTINGS</h3>
       </div>
-      <div class="form-grid compact">
-        <label>
-          <span>Project folder</span>
-          <input id="project" type="text" placeholder="aesost" autocomplete="off" />
-          <small>예: aesost → /images/aesost/</small>
-        </label>
+      <div class="form-grid">
         <label>
           <span>Max width</span>
           <select id="maxWidth">
@@ -65,10 +54,6 @@
           </select>
         </label>
       </div>
-      <div class="connection-note" id="connectionNote">
-        <b>UPLOAD SERVER</b>
-        <span>연결 상태를 확인하고 있습니다.</span>
-      </div>
     </section>
 
     <section class="panel upload-panel">
@@ -81,7 +66,7 @@
       <button class="dropzone" id="dropzone" type="button">
         <span class="drop-icon">+</span>
         <strong>이미지를 여기에 끌어다 놓으세요</strong>
-        <span>또는 클릭하여 선택 · JPG / PNG / WEBP · 한 번에 최대 50장</span>
+        <span>또는 클릭하여 선택 · JPG / PNG / WEBP · 최대 20장</span>
       </button>
 
       <div id="queue" class="queue empty">
@@ -90,8 +75,9 @@
 
       <div class="actions">
         <button id="clearBtn" class="button secondary" type="button">CLEAR</button>
-        <button id="uploadBtn" class="button primary" type="button" disabled>OPTIMIZE & UPLOAD</button>
+        <button id="convertBtn" class="button primary" type="button" disabled>CONVERT TO CODE</button>
       </div>
+
       <div class="progress-wrap" id="progressWrap" hidden>
         <div class="progress"><span id="progressBar"></span></div>
         <p id="progressText">Preparing…</p>
@@ -105,7 +91,7 @@
       </div>
 
       <div class="result-tabs">
-        <button class="tab active" data-tab="url" type="button">URL</button>
+        <button class="tab active" data-tab="base64" type="button">BASE64</button>
         <button class="tab" data-tab="html" type="button">HTML</button>
         <button class="tab" data-tab="css" type="button">CSS</button>
       </div>
@@ -114,31 +100,15 @@
         <pre id="codeOutput"></pre>
         <button id="copyBtn" class="copy-button" type="button">COPY ALL</button>
       </div>
-      <div id="uploadedGrid" class="uploaded-grid"></div>
+
+      <div id="convertedGrid" class="converted-grid"></div>
     </section>
 
     <footer>
       <span>NINEWORKS DATABASE</span>
-      <span>GitHub-backed image utility</span>
+      <span>LOCAL IMAGE CODE TEST</span>
     </footer>
   </main>
-
-  <div class="modal-backdrop" id="authModal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-      <p class="eyebrow">NINEWORKS / PRIVATE ACCESS</p>
-      <h2 id="authTitle">관리자 코드 연결</h2>
-      <p>GitHub 토큰이 아닙니다. 이 브라우저에 한 번 저장하면 다음부터 자동으로 연결됩니다.</p>
-      <label>
-        <span>Access code</span>
-        <input id="accessCode" type="password" autocomplete="current-password" placeholder="관리자 코드 입력" />
-      </label>
-      <div class="modal-actions">
-        <button id="forgetBtn" class="button secondary" type="button">RESET</button>
-        <button id="saveAccessBtn" class="button primary" type="button">CONNECT</button>
-      </div>
-      <p class="modal-error" id="authError"></p>
-    </div>
-  </div>
 
   <script src="./app.js"></script>
 </body>
