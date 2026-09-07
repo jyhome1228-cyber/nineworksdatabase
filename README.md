@@ -1,61 +1,65 @@
-# Nineworks Asset
+# Nineworks R2 Asset Uploader
 
-Nineworks 전용 이미지 CDN 업로더입니다. Cloudflare Workers + R2 구조로 동작합니다.
+Cloudflare Workers + R2 based personal image CDN uploader.
 
-## Live
+## Current flow
 
-- Worker: `https://nineworksdatabase.planus253.workers.dev/`
-- GitHub Pages: `https://jyhome1228-cyber.github.io/nineworksdatabase/` → Worker로 자동 이동
+1. Choose an existing R2 project folder, `미분류`, or create a new project folder.
+2. Drop JPG / PNG / WEBP images.
+3. Browser converts them to optimized WebP.
+4. Worker writes WebP files directly to the `nineworks-assets` R2 bucket through the `IMAGE_BUCKET` binding.
+5. Copy CDN URL / HTML / CSS.
 
-## Flow
+No GitHub token, AWS key, R2 access key, or upload login is used in the web UI.
 
-1. JPG / PNG / WEBP 이미지 선택 또는 드래그
-2. 브라우저에서 WebP 최적화
-3. `/api/upload`로 전송
-4. Worker가 `IMAGE_BUCKET` R2 binding을 통해 `nineworks-assets` 버킷에 저장
-5. `/cdn/{folder}/{file}.webp` URL 생성
-6. URL / HTML / CSS 복사
+## Project folders
 
-## Structure
+- `uncategorized` is always available and appears as **미분류** in the UI.
+- Existing top-level R2 folders are loaded from `/api/folders` and shown in the folder selector.
+- `새 프로젝트 폴더 만들기` creates a folder automatically when the first image is uploaded.
+- The last selected folder, max width, and WebP quality are stored locally in the browser.
+
+## Cloudflare configuration
+
+- Worker deployment: `nineworksdatabase.planus253.workers.dev`
+- R2 binding: `IMAGE_BUCKET`
+- R2 bucket: `nineworks-assets`
+- Static app: `./public`
+- Worker: `./src/index.js`
+- Upload endpoint: `/api/upload`
+- Folder endpoint: `/api/folders`
+- Public image path: `/cdn/{folder}/{file}.webp`
+
+## Repository structure
 
 ```text
 public/
-  index.html      # 업로더 UI
-  styles.css      # UI 스타일
-  app.js          # WebP 변환 + 업로드 + 코드 복사
+  index.html
+  styles.css
+  app.js
 src/
-  index.js        # Worker API + R2 저장/전송
-wrangler.jsonc    # Cloudflare 설정 / R2 binding
-package.json      # Wrangler scripts
-index.html        # GitHub Pages → Worker redirect
+  index.js
+wrangler.jsonc
+package.json
+index.html      # GitHub Pages redirect only
 ```
 
-## Cloudflare
+## Deployment
 
-- Worker project: `nineworksdatabase`
-- R2 bucket: `nineworks-assets`
-- R2 binding: `IMAGE_BUCKET`
-- Static asset binding: `ASSETS`
-- workers.dev: enabled
-- GitHub main branch push → Cloudflare 자동 배포
+The GitHub repository is connected to Cloudflare Builds. Changes pushed to `main` are automatically built and deployed with `npx wrangler deploy`.
 
-## Image URL
-
-현재:
+## URL example
 
 ```text
-https://nineworksdatabase.planus253.workers.dev/cdn/aesost/20260907-xxxx.webp
+https://nineworksdatabase.planus253.workers.dev/cdn/aesost/20260907-...webp
 ```
 
-추후 커스텀 도메인 연결 시:
+Later, a custom domain such as `assets.nineworks.kr` can replace the workers.dev host while keeping the same `/cdn/{folder}/{file}.webp` structure.
 
-```text
-https://assets.nineworks.kr/cdn/aesost/20260907-xxxx.webp
-```
+## Design system
 
-## Notes
+The uploader UI uses a token-based layout, spacing, type, radius, interaction and responsive system. Color remains a neutral project-level palette and is not treated as part of the universal structural system.
 
-- 웹 UI에 GitHub token, R2 API key, AWS key를 입력하지 않습니다.
-- 업로드는 Worker와 R2 binding으로 처리됩니다.
-- 업로더는 개인용으로 구성되어 있으며 업로드 API에는 same-origin 제한이 적용되어 있습니다.
-- 외부 공개 업로드 서비스로 전환할 경우 Cloudflare Access 등의 별도 인증 계층을 추가하는 것을 권장합니다.
+## Security note
+
+This is intentionally a simple personal tool with no upload login. The upload endpoint uses a same-origin browser guard and is not intended as a public multi-user upload service.
