@@ -2,99 +2,138 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Nineworks Cloudflare R2 image CDN uploader">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Nineworks R2 image uploader and CDN URL generator">
   <title>NINEWORKS ASSET</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
+  <main class="page-shell">
+    <header class="app-header">
       <div>
-        <p class="eyebrow">NINEWORKS / ASSET</p>
+        <p class="eyebrow">NINEWORKS / ASSET DATABASE</p>
         <h1>IMAGE → R2 CDN</h1>
       </div>
-      <div class="status" id="statusBadge">READY</div>
+      <div class="status" id="statusBadge" aria-live="polite">READY</div>
     </header>
 
-    <section class="hero">
-      <div>
-        <h2>이미지를 올리고<br>CDN 링크를 바로 복사.</h2>
-        <p>JPG · PNG · WEBP 이미지를 브라우저에서 WebP로 최적화하고 Cloudflare R2에 저장합니다. 업로드가 끝나면 URL, HTML, CSS 코드를 바로 복사할 수 있습니다.</p>
+    <section class="hero-section" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <h2 id="page-title">이미지를 올리고<br>짧은 CDN 주소로.</h2>
+        <p>이미지를 브라우저에서 WebP로 최적화하고 Cloudflare R2에 저장한 뒤, 바로 쓸 수 있는 CDN URL과 HTML/CSS 코드를 생성합니다.</p>
       </div>
-      <div class="stats">
-        <div><strong id="fileCount">0</strong><span>FILES</span></div>
-        <div><strong id="totalBefore">0 MB</strong><span>ORIGINAL</span></div>
-        <div><strong id="totalAfter">0 MB</strong><span>WEBP</span></div>
-      </div>
+      <dl class="stats" aria-label="업로드 통계">
+        <div><dt>FILES</dt><dd id="fileCount">0</dd></div>
+        <div><dt>ORIGINAL</dt><dd id="totalBefore">0 MB</dd></div>
+        <div><dt>WEBP</dt><dd id="totalAfter">0 MB</dd></div>
+      </dl>
     </section>
 
-    <section class="panel">
-      <div class="panel-title"><span>01</span><h3>UPLOAD SETTINGS</h3></div>
-      <div class="settings-grid">
-        <label>
-          <span>Project folder</span>
-          <input id="folder" type="text" placeholder="aesost" autocomplete="off">
-        </label>
-        <label>
-          <span>Max width</span>
+    <section class="section-block" aria-labelledby="settings-title">
+      <div class="section-heading">
+        <span class="section-index">01</span>
+        <div>
+          <h3 id="settings-title">UPLOAD SETTINGS</h3>
+          <p>저장할 프로젝트와 이미지 최적화 기준을 선택합니다.</p>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="field field-project">
+          <label for="folderSelect">Project folder</label>
+          <select id="folderSelect" aria-describedby="folderHelp">
+            <option value="uncategorized">미분류</option>
+            <option value="__new__">새 프로젝트 폴더 만들기</option>
+          </select>
+          <p class="helper" id="folderHelp">기존 R2 폴더를 자동으로 불러옵니다.</p>
+        </div>
+
+        <div class="field new-folder-field" id="newFolderField" hidden>
+          <label for="newFolder">New folder</label>
+          <input id="newFolder" type="text" placeholder="예: aesost" autocomplete="off" spellcheck="false">
+          <p class="helper">영문/숫자 기준으로 자동 정리됩니다.</p>
+        </div>
+
+        <div class="field">
+          <label for="maxWidth">Max width</label>
           <select id="maxWidth">
             <option value="1600">1600px</option>
             <option value="1920">1920px</option>
             <option value="2400" selected>2400px</option>
             <option value="3000">3000px</option>
           </select>
-        </label>
-        <label>
-          <span>WebP quality</span>
+        </div>
+
+        <div class="field">
+          <label for="quality">WebP quality</label>
           <select id="quality">
             <option value="0.72">72 / Small</option>
             <option value="0.80">80 / Balanced</option>
             <option value="0.84" selected>84 / Recommended</option>
             <option value="0.90">90 / High</option>
           </select>
-        </label>
+        </div>
       </div>
     </section>
 
-    <section class="panel">
-      <div class="panel-title"><span>02</span><h3>DROP IMAGES</h3></div>
-      <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
-      <button id="dropzone" class="dropzone" type="button">
-        <span class="plus">+</span>
-        <strong>이미지를 여기에 끌어다 놓으세요</strong>
-        <small>또는 클릭하여 선택 · JPG / PNG / WEBP · 최대 20장</small>
-      </button>
-      <div id="queue" class="queue empty">선택된 이미지가 없습니다.</div>
-      <div class="actions">
-        <button id="clearBtn" class="button secondary" type="button">CLEAR</button>
-        <button id="uploadBtn" class="button primary" type="button" disabled>UPLOAD TO R2</button>
+    <section class="section-block" aria-labelledby="drop-title">
+      <div class="section-heading">
+        <span class="section-index">02</span>
+        <div>
+          <h3 id="drop-title">DROP IMAGES</h3>
+          <p>JPG, PNG, WEBP 이미지를 최대 20장까지 한 번에 처리합니다.</p>
+        </div>
       </div>
-      <div id="progressWrap" class="progress-wrap" hidden>
-        <div class="progress"><span id="progressBar"></span></div>
+
+      <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+      <button id="dropzone" class="dropzone" type="button" aria-describedby="drop-help">
+        <span class="drop-icon" aria-hidden="true">+</span>
+        <strong>이미지를 여기에 끌어다 놓으세요</strong>
+        <span id="drop-help">또는 클릭하여 선택</span>
+      </button>
+
+      <div id="queue" class="queue empty" aria-live="polite">선택된 이미지가 없습니다.</div>
+
+      <div class="actions-row">
+        <button id="clearBtn" class="button button-secondary" type="button">비우기</button>
+        <button id="uploadBtn" class="button button-primary" type="button" disabled>업로드하고 CDN 만들기</button>
+      </div>
+
+      <div id="progressWrap" class="progress-wrap" hidden aria-live="polite">
+        <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
         <p id="progressText"></p>
       </div>
     </section>
 
-    <section id="resultPanel" class="panel" hidden>
-      <div class="panel-title"><span>03</span><h3>GENERATED LINKS</h3></div>
-      <div class="tabs">
-        <button class="tab active" data-tab="url">CDN URL</button>
-        <button class="tab" data-tab="html">HTML</button>
-        <button class="tab" data-tab="css">CSS</button>
+    <section id="resultPanel" class="section-block result-section" hidden aria-labelledby="result-title">
+      <div class="section-heading">
+        <span class="section-index">03</span>
+        <div>
+          <h3 id="result-title">CDN RESULT</h3>
+          <p>필요한 형식을 선택하고 전체 또는 개별 코드를 복사합니다.</p>
+        </div>
       </div>
+
+      <div class="tabs" role="tablist" aria-label="코드 형식">
+        <button class="tab active" data-tab="url" role="tab" aria-selected="true" type="button">CDN URL</button>
+        <button class="tab" data-tab="html" role="tab" aria-selected="false" type="button">HTML</button>
+        <button class="tab" data-tab="css" role="tab" aria-selected="false" type="button">CSS</button>
+      </div>
+
       <div class="codebox">
         <pre id="codeOutput"></pre>
-        <button id="copyBtn" class="copy-button" type="button">COPY ALL</button>
+        <button id="copyBtn" class="copy-button" type="button">전체 복사</button>
       </div>
+
       <div id="uploadedGrid" class="uploaded-grid"></div>
     </section>
 
-    <footer>
-      <span>NINEWORKS ASSET</span>
-      <span>CLOUDFLARE WORKERS · R2</span>
+    <footer class="app-footer">
+      <span>NINEWORKS ASSET DATABASE</span>
+      <span>CLOUDFLARE R2</span>
     </footer>
   </main>
+
   <script src="./app.js"></script>
 </body>
 </html>
