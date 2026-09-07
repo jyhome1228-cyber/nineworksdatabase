@@ -1,4 +1,6 @@
 const MAX_FILES = 20;
+const MAX_OUTPUT_DIMENSION = 3000;
+const MAX_WEBP_BYTES = 24 * 1024 * 1024;
 const SETTINGS_KEY = 'nineworks_asset_settings_v2';
 const UNCATEGORIZED = 'uncategorized';
 
@@ -148,15 +150,20 @@ function loadImage(file) {
 
 function canvasToBlob(canvas, quality) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('WebP 변환에 실패했습니다.')), 'image/webp', quality);
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error('WebP 변환에 실패했습니다.')),
+      'image/webp',
+      quality
+    );
   });
 }
 
 async function optimize(file) {
   const image = await loadImage(file);
-  const maxWidth = Number(maxWidthInput.value);
-  const quality = Number(qualityInput.value);
-  const scale = Math.min(1, maxWidth / image.naturalWidth);
+  const requested = Number(maxWidthInput.value) || MAX_OUTPUT_DIMENSION;
+  const maxDimension = Math.min(MAX_OUTPUT_DIMENSION, Math.max(1, requested));
+  const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+  const scale = Math.min(1, maxDimension / longestSide);
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
 
@@ -164,12 +171,26 @@ async function optimize(file) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) throw new Error('이미지 변환 기능을 사용할 수 없습니다.');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(image, 0, 0, width, height);
-  const blob = await canvasToBlob(canvas, quality);
 
-  return { original: file, blob, width, height };
+  let quality = Math.min(0.95, Math.max(0.55, Number(qualityInput.value) || 0.84));
+  let blob = await canvasToBlob(canvas, quality);
+
+  // Very detailed 3000px images can exceed the Worker upload cap.
+  // Keep the 3000px dimensions and lower WebP quality gradually instead.
+  while (blob.size > MAX_WEBP_BYTES && quality > 0.58) {
+    quality = Math.max(0.58, quality - 0.06);
+    blob = await canvasToBlob(canvas, quality);
+  }
+
+  if (blob.size > MAX_WEBP_BYTES) {
+    throw new Error(`${file.name}: 3000px 변환 후 파일 용량이 너무 큽니다. 다른 이미지 또는 낮은 품질을 사용해주세요.`);
+  }
+
+  return { original: file, blob, width, height, quality };
 }
 
 async function upload(item, folder) {
@@ -248,7 +269,7 @@ function saveSettings() {
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-    if (saved.maxWidth) maxWidthInput.value = saved.maxWidth;
+    if (saved.maxWidth) maxWidthInput.value = String(Math.min(MAX_OUTPUT_DIMENSION, Number(saved.maxWidth) || MAX_OUTPUT_DIMENSION));
     if (saved.quality) qualityInput.value = saved.quality;
     if (saved.customFolder) newFolderInput.value = saved.customFolder;
     return saved;
@@ -367,7 +388,11 @@ uploadBtn.addEventListener('click', async () => {
 
 folderSelect.addEventListener('change', toggleNewFolder);
 newFolderInput.addEventListener('input', saveSettings);
-maxWidthInput.addEventListener('change', saveSettings);
+maxWidthInput.addEventListener('change', () => {
+  const value = Math.min(MAX_OUTPUT_DIMENSION, Number(maxWidthInput.value) || MAX_OUTPUT_DIMENSION);
+  maxWidthInput.value = String(value);
+  saveSettings();
+});
 qualityInput.addEventListener('change', saveSettings);
 
 $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
@@ -387,5 +412,6 @@ copyBtn.addEventListener('click', async () => {
 });
 
 const savedSettings = loadSettings();
+if (!savedSettings.maxWidth) maxWidthInput.value = String(MAX_OUTPUT_DIMENSION);
 loadFolders(savedSettings.folder || UNCATEGORIZED);
 renderQueue();
