@@ -28,11 +28,24 @@ function objectUrl(origin, key) {
   return `${origin}/cdn/${encoded}`;
 }
 
-async function uploadImage(request, env) {
+function sameOriginAllowed(request) {
   const url = new URL(request.url);
   const origin = request.headers.get('Origin');
+  return !origin || origin === url.origin;
+}
 
-  if (origin && origin !== url.origin) {
+function validAssetKey(key) {
+  return typeof key === 'string'
+    && key.length > 0
+    && key.length <= 1024
+    && /^[a-z0-9/_-]+\.webp$/i.test(key)
+    && !key.includes('..');
+}
+
+async function uploadImage(request, env) {
+  const url = new URL(request.url);
+
+  if (!sameOriginAllowed(request)) {
     return Response.json({ ok: false, message: 'Cross-origin upload blocked.' }, { status: 403 });
   }
 
@@ -133,6 +146,36 @@ async function listAssets(request, env) {
   });
 }
 
+async function deleteAssets(request, env) {
+  if (!sameOriginAllowed(request)) {
+    return Response.json({ ok: false, message: 'Cross-origin delete blocked.' }, { status: 403 });
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json({ ok: false, message: 'Invalid delete request.' }, { status: 400 });
+  }
+
+  const keys = Array.isArray(payload?.keys) ? [...new Set(payload.keys)] : [];
+  if (!keys.length || keys.length > 100) {
+    return Response.json({ ok: false, message: 'Delete request must contain 1 to 100 assets.' }, { status: 400 });
+  }
+
+  if (keys.some((key) => !validAssetKey(key))) {
+    return Response.json({ ok: false, message: 'Invalid asset key.' }, { status: 400 });
+  }
+
+  await Promise.all(keys.map((key) => env.IMAGE_BUCKET.delete(key)));
+
+  return Response.json({
+    ok: true,
+    deleted: keys.length,
+    keys
+  });
+}
+
 async function serveImage(request, env) {
   const url = new URL(request.url);
   const encodedKey = url.pathname.replace(/^\/cdn\//, '');
@@ -165,6 +208,10 @@ export default {
 
     if (url.pathname === '/api/assets' && request.method === 'GET') {
       return listAssets(request, env);
+    }
+
+    if (url.pathname === '/api/assets' && request.method === 'DELETE') {
+      return deleteAssets(request, env);
     }
 
     if (url.pathname.startsWith('/cdn/') && (request.method === 'GET' || request.method === 'HEAD')) {
