@@ -1,54 +1,61 @@
-# Nineworks R2 Asset Uploader
+# Nineworks Asset
 
-Cloudflare Workers + R2 based personal image CDN uploader.
+Nineworks 전용 이미지 CDN 업로더입니다. Cloudflare Workers + R2 구조로 동작합니다.
+
+## Live
+
+- Worker: `https://nineworksdatabase.planus253.workers.dev/`
+- GitHub Pages: `https://jyhome1228-cyber.github.io/nineworksdatabase/` → Worker로 자동 이동
 
 ## Flow
 
-1. Drop JPG / PNG / WEBP images
-2. Browser converts them to optimized WebP
-3. Worker writes the WebP file directly to an R2 bucket using an R2 binding
-4. The Worker returns a CDN URL
-5. Copy URL / HTML / CSS
+1. JPG / PNG / WEBP 이미지 선택 또는 드래그
+2. 브라우저에서 WebP 최적화
+3. `/api/upload`로 전송
+4. Worker가 `IMAGE_BUCKET` R2 binding을 통해 `nineworks-assets` 버킷에 저장
+5. `/cdn/{folder}/{file}.webp` URL 생성
+6. URL / HTML / CSS 복사
 
-No GitHub token, AWS key, R2 access key, or upload login is used in the web UI.
+## Structure
 
-## Cloudflare deployment
+```text
+public/
+  index.html      # 업로더 UI
+  styles.css      # UI 스타일
+  app.js          # WebP 변환 + 업로드 + 코드 복사
+src/
+  index.js        # Worker API + R2 저장/전송
+wrangler.jsonc    # Cloudflare 설정 / R2 binding
+package.json      # Wrangler scripts
+index.html        # GitHub Pages → Worker redirect
+```
 
-This repository is already configured as a Cloudflare Workers project.
+## Cloudflare
 
-- Worker name: `nineworks-assets`
-- R2 binding: `IMAGE_BUCKET`
+- Worker project: `nineworksdatabase`
 - R2 bucket: `nineworks-assets`
-- Static app: `./public`
-- Upload endpoint: `/api/upload`
-- Public image path: `/cdn/{folder}/{file}.webp`
+- R2 binding: `IMAGE_BUCKET`
+- Static asset binding: `ASSETS`
+- workers.dev: enabled
+- GitHub main branch push → Cloudflare 자동 배포
 
-### Dashboard
+## Image URL
 
-1. Cloudflare Dashboard → **Workers & Pages**
-2. **Create application**
-3. **Import a repository**
-4. Select `jyhome1228-cyber/nineworksdatabase`
-5. Save and Deploy
+현재:
 
-The repository already includes `wrangler.jsonc`. Current Wrangler versions can automatically provision supported resources such as the R2 bucket and bind them during deployment.
+```text
+https://nineworksdatabase.planus253.workers.dev/cdn/aesost/20260907-xxxx.webp
+```
 
-After deployment, open the provided `*.workers.dev` address and upload an image.
+추후 커스텀 도메인 연결 시:
 
-Example result:
+```text
+https://assets.nineworks.kr/cdn/aesost/20260907-xxxx.webp
+```
 
-`https://nineworks-assets.<your-workers-subdomain>.workers.dev/cdn/aesost/20260907-...webp`
+## Notes
 
-## Later: custom domain
-
-When the upload test is stable, connect a custom domain such as:
-
-`assets.nineworks.kr`
-
-Then image URLs can look like:
-
-`https://assets.nineworks.kr/cdn/aesost/20260907-...webp`
-
-## Security note
-
-This is intentionally a simple personal test tool with no login. The upload endpoint uses only a same-origin browser guard; it is not intended as a public multi-user upload service. Add Cloudflare Access or another authorization layer before exposing the uploader broadly.
+- 웹 UI에 GitHub token, R2 API key, AWS key를 입력하지 않습니다.
+- 업로드는 Worker와 R2 binding으로 처리됩니다.
+- 업로더는 개인용으로 구성되어 있으며 업로드 API에는 same-origin 제한이 적용되어 있습니다.
+- 외부 공개 업로드 서비스로 전환할 경우 Cloudflare Access 등의 별도 인증 계층을 추가하는 것을 권장합니다.
