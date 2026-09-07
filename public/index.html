@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Nineworks Cloudflare R2 image CDN uploader">
   <title>NINEWORKS ASSET</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -10,7 +11,7 @@
   <main class="shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">NINEWORKS / ASSET TOOL</p>
+        <p class="eyebrow">NINEWORKS / ASSET</p>
         <h1>IMAGE → R2 CDN</h1>
       </div>
       <div class="status" id="statusBadge">READY</div>
@@ -18,8 +19,8 @@
 
     <section class="hero">
       <div>
-        <h2>이미지를 올리면<br>짧은 CDN 주소로.</h2>
-        <p>이미지를 브라우저에서 WebP로 최적화하고 Cloudflare R2에 저장한 뒤, 바로 쓸 수 있는 CDN URL과 HTML/CSS 코드를 생성합니다.</p>
+        <h2>이미지를 올리고<br>CDN 링크를 바로 복사.</h2>
+        <p>JPG · PNG · WEBP 이미지를 브라우저에서 WebP로 최적화하고 Cloudflare R2에 저장합니다. 업로드가 끝나면 URL, HTML, CSS 코드를 바로 복사할 수 있습니다.</p>
       </div>
       <div class="stats">
         <div><strong id="fileCount">0</strong><span>FILES</span></div>
@@ -32,8 +33,8 @@
       <div class="panel-title"><span>01</span><h3>UPLOAD SETTINGS</h3></div>
       <div class="settings-grid">
         <label>
-          <span>Folder</span>
-          <input id="folder" type="text" value="test" placeholder="aesost">
+          <span>Project folder</span>
+          <input id="folder" type="text" placeholder="aesost" autocomplete="off">
         </label>
         <label>
           <span>Max width</span>
@@ -67,7 +68,7 @@
       <div id="queue" class="queue empty">선택된 이미지가 없습니다.</div>
       <div class="actions">
         <button id="clearBtn" class="button secondary" type="button">CLEAR</button>
-        <button id="uploadBtn" class="button primary" type="button" disabled>UPLOAD & GET CDN</button>
+        <button id="uploadBtn" class="button primary" type="button" disabled>UPLOAD TO R2</button>
       </div>
       <div id="progressWrap" class="progress-wrap" hidden>
         <div class="progress"><span id="progressBar"></span></div>
@@ -76,7 +77,7 @@
     </section>
 
     <section id="resultPanel" class="panel" hidden>
-      <div class="panel-title"><span>03</span><h3>CDN RESULT</h3></div>
+      <div class="panel-title"><span>03</span><h3>GENERATED LINKS</h3></div>
       <div class="tabs">
         <button class="tab active" data-tab="url">CDN URL</button>
         <button class="tab" data-tab="html">HTML</button>
@@ -90,8 +91,8 @@
     </section>
 
     <footer>
-      <span>NINEWORKS ASSET DATABASE</span>
-      <span>CLOUDFLARE R2</span>
+      <span>NINEWORKS ASSET</span>
+      <span>CLOUDFLARE WORKERS · R2</span>
     </footer>
   </main>
   <script src="./app.js"></script>
