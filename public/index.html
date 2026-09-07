@@ -6,6 +6,7 @@
   <meta name="description" content="Nineworks R2 image uploader and CDN URL generator">
   <title>NINEWORKS ASSET</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./library.css">
 </head>
 <body>
   <main class="page-shell">
@@ -14,7 +15,13 @@
         <p class="eyebrow">NINEWORKS / ASSET DATABASE</p>
         <h1>IMAGE → R2 CDN</h1>
       </div>
-      <div class="status" id="statusBadge" aria-live="polite">READY</div>
+      <div class="header-actions">
+        <nav class="app-nav" aria-label="Asset navigation">
+          <a class="nav-link active" href="./" aria-current="page">UPLOAD</a>
+          <a class="nav-link" href="./library.html">LIBRARY</a>
+        </nav>
+        <div class="status" id="statusBadge" aria-live="polite">READY</div>
+      </div>
     </header>
 
     <section class="hero-section" aria-labelledby="page-title">
