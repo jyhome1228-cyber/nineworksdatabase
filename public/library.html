@@ -11,31 +11,19 @@
   <script src="./boot.js"></script>
 </head>
 <body>
-  <div class="system-grid" aria-hidden="true"></div>
-  <div class="code-stream" aria-hidden="true">
-    <span>bucket.list prefix=project/</span>
-    <span>object.metadata → loaded</span>
-    <span>cdn.edge cache=immutable</span>
-    <span>library.index synced</span>
-    <span>delete.batch max=100</span>
-    <span>r2.objects enumerate</span>
-    <span>selection.state mutable</span>
-    <span>worker.status ready</span>
-  </div>
-
   <main class="page-shell">
     <header class="app-header console-header">
       <div class="brand-block">
         <span class="brand-mark" aria-hidden="true">NW</span>
         <div>
-          <p class="eyebrow">NINEWORKS / INTERNAL TOOL</p>
+          <p class="eyebrow">NINEWORKS / ASSET DATABASE</p>
           <h1>ASSET CONSOLE</h1>
         </div>
       </div>
       <div class="header-actions">
         <nav class="app-nav" aria-label="Asset navigation">
-          <a class="nav-link" href="./">UPLOAD</a>
-          <a class="nav-link active" href="./library.html" aria-current="page">LIBRARY</a>
+          <a class="nav-link" href="./">이미지 업로드</a>
+          <a class="nav-link active" href="./library.html" aria-current="page">라이브러리</a>
         </nav>
         <div class="status" id="statusBadge" aria-live="polite"><i></i>READY</div>
       </div>
@@ -43,48 +31,51 @@
 
     <section class="console-overview library-overview" aria-labelledby="page-title">
       <div class="overview-copy">
-        <div class="console-kicker"><span>02</span> OBJECT DATABASE</div>
-        <h2 id="page-title">ASSET LIBRARY</h2>
-        <p>프로젝트 prefix 기준으로 R2 오브젝트를 조회하고 CDN URL, HTML, CSS 코드를 재사용하거나 더 이상 필요 없는 파일을 정리합니다.</p>
+        <div class="console-kicker"><span>02</span> LIBRARY</div>
+        <h2 id="page-title">이미지 라이브러리</h2>
+        <p>프로젝트별로 저장된 이미지를 찾고, CDN URL · HTML · CSS 코드를 다시 복사하거나 필요 없는 이미지를 삭제합니다.</p>
+        <div class="overview-actions">
+          <a class="button button-primary primary-upload-link" href="./">+ 이미지 업로드</a>
+        </div>
       </div>
-      <div class="environment-panel" aria-label="Library environment">
-        <div class="env-row"><span>SOURCE</span><strong>R2 OBJECT STORE</strong></div>
-        <div class="env-row"><span>BUCKET</span><strong>nineworks-assets</strong></div>
-        <div class="env-row"><span>MODE</span><strong>READ / DELETE</strong></div>
-        <div class="env-row"><span>DELIVERY</span><strong>WORKERS CDN</strong></div>
+      <div class="environment-panel" aria-label="저장소 정보">
+        <div class="env-row"><span>저장소</span><strong>Cloudflare R2</strong></div>
+        <div class="env-row"><span>버킷</span><strong>nineworks-assets</strong></div>
+        <div class="env-row"><span>관리 기능</span><strong>조회 · 복사 · 삭제</strong></div>
+        <div class="env-row"><span>연결 상태</span><strong>정상 연결</strong></div>
       </div>
     </section>
 
     <dl class="metric-strip" aria-label="라이브러리 통계">
-      <div><dt>VISIBLE FILES</dt><dd id="assetCount">0</dd></div>
-      <div><dt>TOTAL SIZE</dt><dd id="assetSize">0 MB</dd></div>
-      <div><dt>ACTIVE FOLDER</dt><dd id="folderLabel">미분류</dd></div>
-      <div class="metric-runtime"><dt>DATABASE</dt><dd><span class="online-dot"></span>CONNECTED</dd></div>
+      <div><dt>현재 이미지</dt><dd id="assetCount">0</dd></div>
+      <div><dt>전체 용량</dt><dd id="assetSize">0 MB</dd></div>
+      <div><dt>선택한 프로젝트</dt><dd id="folderLabel">미분류</dd></div>
+      <div class="metric-runtime"><dt>데이터베이스</dt><dd><span class="online-dot"></span>연결됨</dd></div>
     </dl>
 
     <div class="library-console-grid">
       <section class="section-block console-panel browse-panel" aria-labelledby="filter-title">
         <div class="panel-bar">
           <div>
-            <span class="panel-code">QUERY/01</span>
-            <h3 id="filter-title">BROWSE OBJECTS</h3>
+            <span class="panel-code">01</span>
+            <h3 id="filter-title">프로젝트 이미지 찾기</h3>
+            <p class="panel-description">프로젝트를 선택하거나 파일명으로 검색하세요.</p>
           </div>
-          <span class="panel-state">LIVE R2</span>
         </div>
 
         <div class="library-toolbar">
           <div class="field">
-            <label for="libraryFolder">PROJECT FOLDER</label>
+            <label for="libraryFolder">프로젝트</label>
             <select id="libraryFolder">
               <option value="uncategorized">미분류</option>
             </select>
           </div>
           <div class="field library-search-field">
-            <label for="librarySearch">SEARCH OBJECT</label>
-            <input id="librarySearch" type="search" placeholder="filename.webp" autocomplete="off">
+            <label for="librarySearch">파일명 검색</label>
+            <input id="librarySearch" type="search" placeholder="예: main-visual.webp" autocomplete="off">
           </div>
           <div class="library-refresh-wrap">
-            <button id="refreshBtn" class="button button-secondary" type="button">REFRESH</button>
+            <button id="refreshBtn" class="button button-secondary" type="button">새로고침</button>
           </div>
         </div>
       </section>
@@ -92,10 +83,10 @@
       <section class="section-block console-panel code-panel" aria-labelledby="code-title">
         <div class="panel-bar">
           <div>
-            <span class="panel-code">EXPORT/02</span>
-            <h3 id="code-title">FOLDER CODE</h3>
+            <span class="panel-code">02</span>
+            <h3 id="code-title">코드 모아보기</h3>
+            <p class="panel-description">현재 프로젝트의 이미지 코드를 한 번에 복사합니다.</p>
           </div>
-          <span class="panel-state">GENERATED</span>
         </div>
 
         <div class="tabs" role="tablist" aria-label="코드 형식">
@@ -104,9 +95,9 @@
           <button class="tab" data-tab="css" role="tab" aria-selected="false" type="button">CSS</button>
         </div>
         <div class="codebox library-codebox terminal-box">
-          <div class="terminal-title"><span></span><span></span><span></span><code>folder-output.log</code></div>
-          <pre id="libraryCode">Waiting for object query...</pre>
-          <button id="copyFolderBtn" class="copy-button" type="button">COPY ALL</button>
+          <div class="terminal-title"><code>PROJECT CODE</code></div>
+          <pre id="libraryCode">이미지를 불러오면 코드가 표시됩니다.</pre>
+          <button id="copyFolderBtn" class="copy-button" type="button">전체 복사</button>
         </div>
       </section>
     </div>
@@ -114,58 +105,55 @@
     <section class="section-block console-panel assets-panel" aria-labelledby="assets-title">
       <div class="panel-bar assets-panel-bar">
         <div>
-          <span class="panel-code">OBJECTS/03</span>
-          <h3 id="assets-title">STORED ASSETS</h3>
-          <p id="assetSummary">R2 object list를 불러오는 중입니다.</p>
+          <span class="panel-code">03</span>
+          <h3 id="assets-title">저장된 이미지</h3>
+          <p id="assetSummary">이미지 목록을 불러오는 중입니다.</p>
         </div>
-        <span class="panel-state">OBJECT VIEW</span>
       </div>
 
       <div class="selection-toolbar" id="selectionToolbar">
         <div class="selection-info">
           <strong id="selectedCount">0개 선택</strong>
-          <span>선택한 오브젝트는 R2에서 영구 삭제할 수 있습니다.</span>
+          <span>여러 이미지를 선택해 한 번에 삭제할 수 있습니다.</span>
         </div>
         <div class="selection-actions">
-          <button id="selectAllBtn" class="button button-secondary" type="button">SELECT ALL</button>
-          <button id="clearSelectionBtn" class="button button-secondary" type="button" disabled>CLEAR</button>
-          <button id="deleteSelectedBtn" class="button button-critical" type="button" disabled>DELETE SELECTED</button>
+          <button id="selectAllBtn" class="button button-secondary" type="button">전체 선택</button>
+          <button id="clearSelectionBtn" class="button button-secondary" type="button" disabled>선택 해제</button>
+          <button id="deleteSelectedBtn" class="button button-critical" type="button" disabled>선택 삭제</button>
         </div>
       </div>
 
       <div id="libraryGrid" class="library-grid" aria-live="polite"></div>
       <div id="emptyLibrary" class="library-empty" hidden>
-        <code>NO_OBJECTS_FOUND</code>
-        <strong>이 폴더에는 아직 이미지가 없습니다.</strong>
-        <p>Upload에서 이미지를 추가하면 R2 object가 여기에 표시됩니다.</p>
-        <a class="button button-primary empty-upload-link" href="./">OPEN UPLOAD</a>
+        <strong>이 프로젝트에는 아직 이미지가 없습니다.</strong>
+        <p>이미지를 업로드하면 이곳에서 다시 찾아서 사용할 수 있습니다.</p>
+        <a class="button button-primary empty-upload-link" href="./">+ 이미지 업로드</a>
       </div>
       <div class="load-more-row">
-        <button id="loadMoreBtn" class="button button-secondary" type="button" hidden>LOAD MORE</button>
+        <button id="loadMoreBtn" class="button button-secondary" type="button" hidden>더 보기</button>
       </div>
     </section>
 
     <footer class="app-footer console-footer">
-      <span>NINEWORKS ASSET CONSOLE / LIBRARY</span>
-      <span>R2 OBJECT DATABASE · EDGE DELIVERY</span>
+      <span>NINEWORKS ASSET CONSOLE</span>
+      <span>CLOUDFLARE R2</span>
     </footer>
   </main>
 
   <div id="deleteModal" class="modal-backdrop" hidden>
     <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle" aria-describedby="deleteModalDescription">
-      <p class="eyebrow">DESTRUCTIVE OPERATION</p>
-      <h2 id="deleteModalTitle">R2 오브젝트를 삭제할까요?</h2>
-      <p id="deleteModalDescription">삭제된 파일은 R2에서 영구 제거되며 복구할 수 없습니다.</p>
+      <p class="eyebrow">DELETE IMAGE</p>
+      <h2 id="deleteModalTitle">이미지를 삭제할까요?</h2>
+      <p id="deleteModalDescription">삭제된 이미지는 R2에서 영구 제거되며 복구할 수 없습니다.</p>
       <div class="delete-summary" id="deleteSummary"></div>
       <div class="modal-actions">
-        <button id="cancelDeleteBtn" class="button button-secondary" type="button">CANCEL</button>
-        <button id="confirmDeleteBtn" class="button button-critical" type="button">DELETE OBJECT</button>
+        <button id="cancelDeleteBtn" class="button button-secondary" type="button">취소</button>
+        <button id="confirmDeleteBtn" class="button button-critical" type="button">삭제</button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-
   <script src="./library.js"></script>
 </body>
 </html>
