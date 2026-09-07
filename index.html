@@ -3,145 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Nineworks CDN upload utility." />
-  <title>NINEWORKS CDN UPLOADER</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta http-equiv="refresh" content="0; url=https://nineworksdatabase.planus253.workers.dev/" />
+  <link rel="canonical" href="https://nineworksdatabase.planus253.workers.dev/" />
+  <title>NINEWORKS IMAGE CDN</title>
+  <script>
+    window.location.replace('https://nineworksdatabase.planus253.workers.dev/' + window.location.search + window.location.hash);
+  </script>
+  <style>
+    html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Noto Sans KR",sans-serif;background:#f5f5f2;color:#111}
+    body{display:grid;place-items:center}
+    main{text-align:center;padding:24px}
+    p{color:#666;line-height:1.6}
+    a{color:#111}
+  </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">NINEWORKS / SIMPLE TOOL</p>
-        <h1>IMAGE → CDN</h1>
-      </div>
-      <div class="status" id="statusBadge">READY</div>
-    </header>
-
-    <section class="intro">
-      <div>
-        <h2>이미지를 올리고<br>CDN 링크로 바로 변환.</h2>
-        <p>브라우저에서 이미지를 WebP로 최적화한 다음 Cloudinary에 직접 업로드하고, 짧은 CDN URL과 HTML/CSS 코드를 바로 생성합니다. GitHub 토큰이나 별도 로그인 입력은 없습니다.</p>
-      </div>
-      <div class="stats">
-        <div><strong id="fileCount">0</strong><span>FILES</span></div>
-        <div><strong id="totalBefore">0 MB</strong><span>ORIGINAL</span></div>
-        <div><strong id="totalAfter">0 MB</strong><span>WEBP</span></div>
-      </div>
-    </section>
-
-    <section class="panel settings-panel">
-      <div class="panel-title">
-        <span>01</span>
-        <h3>SETUP</h3>
-      </div>
-      <div class="form-grid setup-grid">
-        <label>
-          <span>Cloud name</span>
-          <input id="cloudName" type="text" placeholder="예: demo-cloud" autocomplete="off" />
-          <small>Cloudinary 대시보드의 Cloud name</small>
-        </label>
-        <label>
-          <span>Upload preset</span>
-          <input id="uploadPreset" type="text" placeholder="예: nineworks_unsigned" autocomplete="off" />
-          <small>Unsigned upload preset 이름</small>
-        </label>
-        <label>
-          <span>Folder</span>
-          <input id="folder" type="text" placeholder="nineworks/test" autocomplete="off" />
-          <small>업로드될 폴더명 · 비워두면 <b>nineworks/test</b></small>
-        </label>
-        <label>
-          <span>Max width</span>
-          <select id="maxWidth">
-            <option value="1600">1600px</option>
-            <option value="1920">1920px</option>
-            <option value="2400" selected>2400px</option>
-            <option value="3000">3000px</option>
-          </select>
-        </label>
-        <label>
-          <span>WebP quality</span>
-          <select id="quality">
-            <option value="0.72">72 / Small</option>
-            <option value="0.8">80 / Balanced</option>
-            <option value="0.84" selected>84 / Recommended</option>
-            <option value="0.9">90 / High</option>
-          </select>
-        </label>
-      </div>
-      <div class="notice">
-        <b>FIRST TIME ONLY</b>
-        <span>Cloud name과 unsigned upload preset만 한 번 입력하면 이 브라우저에 저장됩니다.</span>
-      </div>
-    </section>
-
-    <section class="panel upload-panel">
-      <div class="panel-title">
-        <span>02</span>
-        <h3>DROP IMAGES</h3>
-      </div>
-
-      <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
-      <button class="dropzone" id="dropzone" type="button">
-        <span class="drop-icon">+</span>
-        <strong>이미지를 여기에 끌어다 놓으세요</strong>
-        <span>또는 클릭하여 선택 · JPG / PNG / WEBP · 최대 10장</span>
-      </button>
-
-      <div id="queue" class="queue empty">
-        <p>선택된 이미지가 없습니다.</p>
-      </div>
-
-      <div class="actions">
-        <button id="clearBtn" class="button secondary" type="button">CLEAR</button>
-        <button id="uploadBtn" class="button primary" type="button" disabled>UPLOAD & GET CDN</button>
-      </div>
-
-      <div class="progress-wrap" id="progressWrap" hidden>
-        <div class="progress"><span id="progressBar"></span></div>
-        <p id="progressText">Preparing…</p>
-      </div>
-    </section>
-
-    <section class="panel result-panel" id="resultPanel" hidden>
-      <div class="panel-title">
-        <span>03</span>
-        <h3>GENERATED CODE</h3>
-      </div>
-
-      <div class="result-tabs">
-        <button class="tab active" data-tab="url" type="button">CDN URL</button>
-        <button class="tab" data-tab="html" type="button">HTML</button>
-        <button class="tab" data-tab="css" type="button">CSS</button>
-      </div>
-
-      <div class="codebox">
-        <pre id="codeOutput"></pre>
-        <button id="copyBtn" class="copy-button" type="button">COPY ALL</button>
-      </div>
-
-      <div id="uploadedGrid" class="uploaded-grid"></div>
-    </section>
-
-    <section class="panel guide-panel">
-      <div class="panel-title">
-        <span>04</span>
-        <h3>QUICK SETUP GUIDE</h3>
-      </div>
-      <ol class="guide-list">
-        <li>Cloudinary 무료 계정을 만든다.</li>
-        <li>Settings 또는 Upload 메뉴에서 <b>unsigned upload preset</b>을 하나 만든다.</li>
-        <li>Cloud name과 preset 이름을 위 입력칸에 넣는다.</li>
-        <li>이미지를 드래그하고 <b>UPLOAD & GET CDN</b>을 누른다.</li>
-      </ol>
-    </section>
-
-    <footer>
-      <span>NINEWORKS CDN UPLOADER</span>
-      <span>CLOUDINARY DIRECT UPLOAD TEST</span>
-    </footer>
+  <main>
+    <strong>NINEWORKS IMAGE CDN</strong>
+    <p>Cloudflare R2 업로더로 이동합니다.</p>
+    <a href="https://nineworksdatabase.planus253.workers.dev/">바로 열기</a>
   </main>
-
-  <script src="./app.js"></script>
 </body>
 </html>
