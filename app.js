@@ -2,6 +2,11 @@ const OWNER = 'jyhome1228-cyber';
 const REPO = 'nineworksdatabase';
 const BRANCH = 'main';
 const MAX_FILES_PER_BATCH = 50;
+const MAX_OPTIMIZED_BYTES = 2.2 * 1024 * 1024;
+const MAX_REQUEST_BASE64 = 3_150_000;
+const DEFAULT_API_URL = 'https://nineworksdatabase.vercel.app/api/upload';
+const API_URL = localStorage.getItem('nineworks_api_url') || (location.hostname.endsWith('.vercel.app') ? '/api/upload' : DEFAULT_API_URL);
+const ACCESS_STORAGE_KEY = 'nineworks_access_code';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -9,7 +14,6 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 const dropzone = $('#dropzone');
 const fileInput = $('#fileInput');
 const projectInput = $('#project');
-const tokenInput = $('#token');
 const maxWidthInput = $('#maxWidth');
 const qualityInput = $('#quality');
 const queue = $('#queue');
@@ -26,11 +30,20 @@ const uploadedGrid = $('#uploadedGrid');
 const fileCount = $('#fileCount');
 const totalBefore = $('#totalBefore');
 const totalAfter = $('#totalAfter');
+const connectBtn = $('#connectBtn');
+const connectionText = $('#connectionText');
+const connectionNote = $('#connectionNote');
+const authModal = $('#authModal');
+const accessCodeInput = $('#accessCode');
+const saveAccessBtn = $('#saveAccessBtn');
+const forgetBtn = $('#forgetBtn');
+const authError = $('#authError');
 
 let selectedFiles = [];
 let convertedFiles = [];
 let uploadedItems = [];
 let activeTab = 'url';
+let connected = false;
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB';
@@ -57,7 +70,7 @@ function safeBaseName(name, index) {
 }
 
 function randomId() {
-  return Math.random().toString(36).slice(2, 8);
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function setStatus(text) {
@@ -68,6 +81,14 @@ function setProgress(percent, text) {
   progressWrap.hidden = false;
   progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
   progressText.textContent = text;
+}
+
+function setConnection(kind, label, message) {
+  connectBtn.className = `connection ${kind || ''}`.trim();
+  connectionText.textContent = label;
+  connectionNote.className = `connection-note ${kind === 'connected' ? 'connected' : kind === 'error' ? 'error' : ''}`.trim();
+  connectionNote.innerHTML = `<b>UPLOAD SERVER</b><span>${escapeHtml(message)}</span>`;
+  connected = kind === 'connected';
 }
 
 function updateStats() {
@@ -88,7 +109,7 @@ function renderQueue() {
 
   queue.className = 'queue';
   queue.innerHTML = '';
-  selectedFiles.forEach((file, i) => {
+  selectedFiles.forEach((file) => {
     const card = document.createElement('div');
     card.className = 'queue-item';
     const url = URL.createObjectURL(file);
@@ -165,6 +186,86 @@ clearBtn.addEventListener('click', () => {
   renderQueue();
 });
 
+function openAuthModal(message = '') {
+  authModal.hidden = false;
+  authError.textContent = message;
+  accessCodeInput.value = localStorage.getItem(ACCESS_STORAGE_KEY) || '';
+  setTimeout(() => accessCodeInput.focus(), 30);
+}
+
+function closeAuthModal() {
+  authModal.hidden = true;
+  authError.textContent = '';
+}
+
+connectBtn.addEventListener('click', () => openAuthModal());
+authModal.addEventListener('click', (e) => {
+  if (e.target === authModal) closeAuthModal();
+});
+accessCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') saveAccessBtn.click();
+});
+
+forgetBtn.addEventListener('click', () => {
+  localStorage.removeItem(ACCESS_STORAGE_KEY);
+  accessCodeInput.value = '';
+  connected = false;
+  setConnection('locked', 'CONNECT', '관리자 코드를 연결하면 이후 이 브라우저에서 자동으로 사용합니다.');
+});
+
+async function verifyConnection(code, showError = false) {
+  if (!code) {
+    setConnection('locked', 'CONNECT', '관리자 코드를 한 번 연결해주세요. GitHub 토큰은 필요하지 않습니다.');
+    return false;
+  }
+
+  try {
+    setConnection('', 'CHECKING', '업로드 서버와 연결을 확인하고 있습니다.');
+    const response = await fetch(API_URL, {
+      method: 'GET',
+      headers: { 'X-Access-Code': code }
+    });
+
+    if (response.ok) {
+      setConnection('connected', 'CONNECTED', 'Nineworks GitHub 이미지 저장소에 연결되었습니다.');
+      return true;
+    }
+
+    let data = {};
+    try { data = await response.json(); } catch {}
+
+    if (response.status === 401) {
+      setConnection('locked', 'LOCKED', '관리자 코드가 필요하거나 올바르지 않습니다.');
+      if (showError) authError.textContent = '관리자 코드가 올바르지 않습니다.';
+      return false;
+    }
+
+    const message = data.message || `업로드 서버 응답 오류 (${response.status})`;
+    setConnection('error', 'SERVER ERROR', message);
+    if (showError) authError.textContent = message;
+    return false;
+  } catch (error) {
+    setConnection('error', 'OFFLINE', '업로드 서버가 아직 배포되지 않았거나 연결할 수 없습니다.');
+    if (showError) authError.textContent = '업로드 서버 연결이 아직 완료되지 않았습니다.';
+    return false;
+  }
+}
+
+saveAccessBtn.addEventListener('click', async () => {
+  const code = accessCodeInput.value.trim();
+  if (!code) {
+    authError.textContent = '관리자 코드를 입력해주세요.';
+    return;
+  }
+  saveAccessBtn.disabled = true;
+  const ok = await verifyConnection(code, true);
+  saveAccessBtn.disabled = false;
+  if (ok) {
+    localStorage.setItem(ACCESS_STORAGE_KEY, code);
+    closeAuthModal();
+  }
+});
+
 async function loadImage(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -181,29 +282,52 @@ async function loadImage(file) {
   });
 }
 
+function canvasToBlob(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('WebP 변환에 실패했습니다.'));
+    }, 'image/webp', quality);
+  });
+}
+
 async function convertToWebP(file, index, folder) {
   const img = await loadImage(file);
   const maxWidth = Number(maxWidthInput.value);
-  const quality = Number(qualityInput.value);
-  const scale = Math.min(1, maxWidth / img.naturalWidth);
-  const width = Math.max(1, Math.round(img.naturalWidth * scale));
-  const height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const selectedQuality = Number(qualityInput.value);
+  const initialScale = Math.min(1, maxWidth / img.naturalWidth);
+  let width = Math.max(1, Math.round(img.naturalWidth * initialScale));
+  let height = Math.max(1, Math.round(img.naturalHeight * initialScale));
+  let quality = selectedQuality;
+  let blob = null;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d', { alpha: true });
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, 0, 0, width, height);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, width, height);
+    blob = await canvasToBlob(canvas, quality);
 
-  const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob((b) => b ? resolve(b) : reject(new Error(`${file.name} WebP 변환에 실패했습니다.`)), 'image/webp', quality);
-  });
+    if (blob.size <= MAX_OPTIMIZED_BYTES) break;
+
+    if (quality > 0.62) {
+      quality = Math.max(0.62, quality - 0.08);
+    } else {
+      width = Math.max(960, Math.round(width * 0.82));
+      height = Math.max(1, Math.round(img.naturalHeight * (width / img.naturalWidth)));
+    }
+  }
+
+  if (!blob || blob.size > MAX_OPTIMIZED_BYTES) {
+    throw new Error(`${file.name}의 최적화 후 용량이 너무 큽니다. Max width를 낮춰주세요.`);
+  }
 
   const name = `${safeBaseName(file.name, index)}-${randomId()}.webp`;
   const path = `images/${folder}/${name}`;
-  return { original: file, blob, name, path, width, height };
+  return { original: file, blob, name, path, width, height, quality };
 }
 
 function blobToBase64(blob) {
@@ -215,76 +339,61 @@ function blobToBase64(blob) {
   });
 }
 
-async function githubRequest(path, token, options = {}) {
-  const res = await fetch(`https://api.github.com${path}`, {
-    ...options,
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    }
-  });
-
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const data = await res.json();
-      detail = data.message || JSON.stringify(data);
-    } catch {
-      detail = await res.text();
-    }
-    throw new Error(`GitHub API ${res.status}: ${detail}`);
-  }
-  return res.status === 204 ? null : res.json();
-}
-
-async function validateAccess(token) {
-  await githubRequest(`/repos/${OWNER}/${REPO}`, token, { method: 'GET' });
-}
-
-async function uploadBatch(files, token) {
-  const ref = await githubRequest(`/repos/${OWNER}/${REPO}/git/ref/heads/${BRANCH}`, token, { method: 'GET' });
-  const parentSha = ref.object.sha;
-  const parentCommit = await githubRequest(`/repos/${OWNER}/${REPO}/git/commits/${parentSha}`, token, { method: 'GET' });
-  const baseTreeSha = parentCommit.tree.sha;
-
-  const treeEntries = [];
-  for (let i = 0; i < files.length; i++) {
-    const item = files[i];
-    setProgress(45 + (i / files.length) * 35, `GitHub에 저장 중 ${i + 1}/${files.length} · ${item.name}`);
-    const base64 = await blobToBase64(item.blob);
-    const createdBlob = await githubRequest(`/repos/${OWNER}/${REPO}/git/blobs`, token, {
-      method: 'POST',
-      body: JSON.stringify({ content: base64, encoding: 'base64' })
+async function prepareUploadChunks(files) {
+  const prepared = [];
+  for (let i = 0; i < files.length; i += 1) {
+    setProgress(45 + (i / files.length) * 12, `업로드 데이터 준비 중 ${i + 1}/${files.length}`);
+    prepared.push({
+      path: files[i].path,
+      content: await blobToBase64(files[i].blob)
     });
-    treeEntries.push({ path: item.path, mode: '100644', type: 'blob', sha: createdBlob.sha });
   }
 
-  setProgress(82, '파일 트리를 생성하고 있습니다…');
-  const tree = await githubRequest(`/repos/${OWNER}/${REPO}/git/trees`, token, {
-    method: 'POST',
-    body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries })
-  });
+  const chunks = [];
+  let chunk = [];
+  let size = 0;
 
-  setProgress(88, '하나의 커밋으로 묶고 있습니다…');
-  const commit = await githubRequest(`/repos/${OWNER}/${REPO}/git/commits`, token, {
-    method: 'POST',
-    body: JSON.stringify({
-      message: `Upload ${files.length} optimized image${files.length > 1 ? 's' : ''}`,
-      tree: tree.sha,
-      parents: [parentSha]
-    })
-  });
+  for (const file of prepared) {
+    const nextSize = file.content.length + file.path.length + 300;
+    if (chunk.length && (size + nextSize > MAX_REQUEST_BASE64 || chunk.length >= 20)) {
+      chunks.push(chunk);
+      chunk = [];
+      size = 0;
+    }
+    chunk.push(file);
+    size += nextSize;
+  }
+  if (chunk.length) chunks.push(chunk);
+  return chunks;
+}
 
-  setProgress(94, 'main 브랜치에 반영하고 있습니다…');
-  await githubRequest(`/repos/${OWNER}/${REPO}/git/refs/heads/${BRANCH}`, token, {
-    method: 'PATCH',
-    body: JSON.stringify({ sha: commit.sha, force: false })
-  });
+async function uploadChunks(chunks, code) {
+  const commits = [];
+  for (let i = 0; i < chunks.length; i += 1) {
+    setProgress(60 + (i / chunks.length) * 36, `GitHub에 저장 중 ${i + 1}/${chunks.length}`);
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Access-Code': code
+      },
+      body: JSON.stringify({ files: chunks[i] })
+    });
 
-  return commit.sha;
+    let data = {};
+    try { data = await response.json(); } catch {}
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem(ACCESS_STORAGE_KEY);
+        connected = false;
+        throw new Error('관리자 코드가 만료되었거나 올바르지 않습니다. 다시 연결해주세요.');
+      }
+      throw new Error(data.message || `업로드 서버 오류 (${response.status})`);
+    }
+    commits.push(data.commit);
+  }
+  return commits;
 }
 
 function buildUrls(files) {
@@ -337,20 +446,27 @@ copyBtn.addEventListener('click', async () => {
   await navigator.clipboard.writeText(getCode(activeTab));
   const old = copyBtn.textContent;
   copyBtn.textContent = 'COPIED';
-  setTimeout(() => copyBtn.textContent = old, 1200);
+  setTimeout(() => { copyBtn.textContent = old; }, 1200);
 });
 
 uploadBtn.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
 
-  const token = tokenInput.value.trim();
-  const folder = slugify(projectInput.value, 'uncategorized');
-  if (!token) {
-    alert('GitHub Fine-grained PAT를 입력해주세요. 토큰은 페이지에 저장되지 않습니다.');
-    tokenInput.focus();
+  const accessCode = localStorage.getItem(ACCESS_STORAGE_KEY) || '';
+  if (!accessCode) {
+    openAuthModal('처음 한 번만 관리자 코드를 연결해주세요.');
     return;
   }
 
+  if (!connected) {
+    const ok = await verifyConnection(accessCode);
+    if (!ok) {
+      openAuthModal('업로드 서버 연결을 확인해주세요.');
+      return;
+    }
+  }
+
+  const folder = slugify(projectInput.value, 'uncategorized');
   uploadBtn.disabled = true;
   clearBtn.disabled = true;
   setStatus('WORKING');
@@ -359,32 +475,40 @@ uploadBtn.addEventListener('click', async () => {
   resultPanel.hidden = true;
 
   try {
-    setProgress(3, 'GitHub 접근 권한을 확인하고 있습니다…');
-    await validateAccess(token);
-
-    for (let i = 0; i < selectedFiles.length; i++) {
-      setProgress(8 + (i / selectedFiles.length) * 34, `WebP 변환 중 ${i + 1}/${selectedFiles.length} · ${selectedFiles[i].name}`);
+    for (let i = 0; i < selectedFiles.length; i += 1) {
+      setProgress(5 + (i / selectedFiles.length) * 38, `WebP 최적화 중 ${i + 1}/${selectedFiles.length} · ${selectedFiles[i].name}`);
       const converted = await convertToWebP(selectedFiles[i], i, folder);
       convertedFiles.push(converted);
       updateStats();
     }
 
-    setProgress(44, `변환 완료 · ${formatBytes(convertedFiles.reduce((a, f) => a + f.blob.size, 0))}`);
-    const commitSha = await uploadBatch(convertedFiles, token);
+    setProgress(44, `최적화 완료 · ${formatBytes(convertedFiles.reduce((a, f) => a + f.blob.size, 0))}`);
+    const chunks = await prepareUploadChunks(convertedFiles);
+    const commits = await uploadChunks(chunks, accessCode);
     uploadedItems = buildUrls(convertedFiles);
 
-    setProgress(100, `업로드 완료 · commit ${commitSha.slice(0, 7)}`);
+    setProgress(100, `업로드 완료 · ${convertedFiles.length} images · ${commits.length} commit batch`);
     setStatus('DONE');
     renderResult();
   } catch (error) {
     console.error(error);
     setStatus('ERROR');
     setProgress(0, error.message);
-    alert(`업로드에 실패했습니다.\n\n${error.message}\n\n토큰이 이 저장소의 Contents Read/Write 권한을 갖고 있는지 확인해주세요.`);
+    alert(`업로드에 실패했습니다.\n\n${error.message}`);
   } finally {
     uploadBtn.disabled = false;
     clearBtn.disabled = false;
   }
 });
 
+async function initConnection() {
+  const code = localStorage.getItem(ACCESS_STORAGE_KEY) || '';
+  if (!code) {
+    setConnection('locked', 'CONNECT', '관리자 코드를 한 번 연결하면 GitHub 토큰 없이 사용할 수 있습니다.');
+    return;
+  }
+  await verifyConnection(code);
+}
+
 renderQueue();
+initConnection();
