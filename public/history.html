@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Nineworks image upload history">
+  <title>NINEWORKS IMAGE HISTORY</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./boot.js"></script>
+  <style>
+    :root { --history-border:#e6e6e3; --history-muted:#777872; --history-bg:#f6f6f3; }
+    * { box-sizing:border-box; }
+    body { background:#fff; }
+    .history-shell { max-width:1480px; }
+    .history-intro { display:flex; align-items:flex-end; justify-content:space-between; gap:28px; padding:58px 0 34px; border-bottom:1px solid var(--history-border); }
+    .history-label { display:inline-block; margin-bottom:13px; font-size:11px; font-weight:700; letter-spacing:.14em; color:#8b8c86; }
+    .history-intro h2 { margin:0 0 10px; font-size:clamp(34px,4vw,58px); line-height:.98; letter-spacing:-.055em; }
+    .history-intro p { max-width:720px; margin:0; font-size:15px; line-height:1.7; color:#686962; word-break:keep-all; }
+    .history-actions { display:flex; gap:8px; flex-shrink:0; }
+    .history-toolbar { position:sticky; top:0; z-index:20; display:grid; grid-template-columns:minmax(240px,1fr) 220px 170px auto; gap:10px; align-items:end; padding:18px 0; background:rgba(255,255,255,.94); border-bottom:1px solid var(--history-border); backdrop-filter:blur(12px); }
+    .history-field label { display:block; margin:0 0 7px; font-size:11px; font-weight:700; color:#75766f; }
+    .history-field input,.history-field select { width:100%; height:42px; padding:0 13px; border:1px solid #dcdcd7; border-radius:9px; background:#fff; font:inherit; font-size:13px; outline:none; }
+    .history-field input:focus,.history-field select:focus { border-color:#9a9b95; box-shadow:0 0 0 3px rgba(0,0,0,.04); }
+    .history-summary { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px 0 14px; }
+    .history-summary strong { font-size:14px; }
+    .history-summary span { font-size:12px; color:#888982; }
+    .history-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding-bottom:28px; }
+    .history-card { overflow:hidden; min-width:0; border:1px solid #deded9; border-radius:9px; background:#fff; transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease; }
+    .history-card:hover { transform:translateY(-2px); border-color:#c9c9c3; box-shadow:0 10px 28px rgba(0,0,0,.06); }
+    .history-preview { position:relative; aspect-ratio:4/3; overflow:hidden; background:#f3f3ef; border-bottom:1px solid #ededE9; }
+    .history-preview img { width:100%; height:100%; display:block; object-fit:contain; }
+    .folder-chip { position:absolute; left:9px; top:9px; max-width:calc(100% - 18px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:5px 7px; border:1px solid rgba(0,0,0,.08); border-radius:999px; background:rgba(255,255,255,.92); font-size:10px; font-weight:700; color:#62635d; backdrop-filter:blur(8px); }
+    .history-card-body { padding:10px 10px 9px; }
+    .history-name { overflow:hidden; margin:0 0 8px; font-size:11px; font-weight:700; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
+    .history-meta { display:flex; align-items:center; gap:7px; min-height:17px; margin-bottom:8px; font-size:10px; color:#92938d; }
+    .history-meta i { width:2px; height:2px; border-radius:50%; background:#c1c2bc; }
+    .history-url { overflow:hidden; margin:0 0 9px; padding-top:8px; border-top:1px solid #efefeb; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:9px; line-height:1.4; color:#92938d; text-overflow:ellipsis; white-space:nowrap; }
+    .history-card-actions { display:flex; gap:5px; }
+    .history-card-actions button,.history-card-actions a { display:inline-flex; align-items:center; justify-content:center; min-width:0; height:29px; padding:0 9px; border:1px solid #d9d9d4; border-radius:7px; background:#fff; color:#222; font:inherit; font-size:10px; font-weight:700; text-decoration:none; cursor:pointer; transition:background .14s ease,border-color .14s ease; }
+    .history-card-actions button:hover,.history-card-actions a:hover { background:#f4f4f1; border-color:#c6c6c0; }
+    .history-empty,.history-loading { grid-column:1/-1; display:flex; min-height:320px; align-items:center; justify-content:center; border:1px dashed #d9d9d4; border-radius:12px; color:#8a8b84; font-size:13px; text-align:center; }
+    .history-loadmore { display:flex; justify-content:center; padding:0 0 38px; }
+    .history-loadmore button[hidden] { display:none; }
+    .history-toast { position:fixed; right:24px; bottom:24px; z-index:80; padding:12px 14px; border-radius:9px; background:#111; color:#fff; font-size:12px; font-weight:700; box-shadow:0 10px 30px rgba(0,0,0,.18); opacity:0; transform:translateY(8px); pointer-events:none; transition:.18s ease; }
+    .history-toast.show { opacity:1; transform:translateY(0); }
+    @media (max-width:1100px) { .history-grid{grid-template-columns:repeat(3,minmax(0,1fr));}.history-toolbar{grid-template-columns:1fr 190px 160px;}.history-toolbar .refresh-wrap{grid-column:1/-1;} }
+    @media (max-width:760px) { .history-intro{align-items:flex-start;flex-direction:column;padding-top:38px}.history-actions{width:100%}.history-actions .button{flex:1}.history-toolbar{position:static;grid-template-columns:1fr 1fr}.history-toolbar .search-field{grid-column:1/-1}.history-toolbar .refresh-wrap{grid-column:1/-1}.history-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.history-card-body{padding:9px}.history-card-actions{flex-wrap:wrap}.history-card-actions button,.history-card-actions a{flex:1}.history-summary{align-items:flex-start;flex-direction:column;gap:5px} }
+    @media (max-width:480px) { .history-grid{grid-template-columns:1fr}.history-toolbar{grid-template-columns:1fr}.history-toolbar .search-field,.history-toolbar .refresh-wrap{grid-column:auto}.history-preview{aspect-ratio:16/10} }
+  </style>
+</head>
+<body>
+  <main class="page-shell history-shell">
+    <header class="app-header simple-header">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true">NW</span>
+        <div><p class="eyebrow">NINEWORKS / ASSET</p><h1>IMAGE CDN</h1></div>
+      </div>
+      <div class="header-actions">
+        <nav class="app-nav" aria-label="Asset navigation">
+          <a class="nav-link" href="./">이미지 업로드</a>
+          <a class="nav-link" href="./library.html">라이브러리</a>
+          <a class="nav-link active" href="./history.html" aria-current="page">이미지 히스토리</a>
+        </nav>
+        <div class="status" id="statusBadge" aria-live="polite"><i></i>LOADING</div>
+      </div>
+    </header>
+
+    <section class="history-intro">
+      <div>
+        <span class="history-label">VISUAL ARCHIVE</span>
+        <h2>이미지 히스토리</h2>
+        <p>R2에 저장된 이미지를 프로젝트 구분 없이 한 화면에서 미리보고, 필요한 URL과 HTML 코드를 바로 복사할 수 있습니다.</p>
+      </div>
+      <div class="history-actions"><a class="button button-secondary" href="./library.html">코드 라이브러리</a><a class="button button-primary" href="./">+ 이미지 업로드</a></div>
+    </section>
+
+    <section class="history-toolbar" aria-label="히스토리 필터">
+      <div class="history-field search-field"><label for="historySearch">검색</label><input id="historySearch" type="search" placeholder="파일명 · 폴더명 · URL 검색" autocomplete="off"></div>
+      <div class="history-field"><label for="folderFilter">프로젝트</label><select id="folderFilter"><option value="all">전체 프로젝트</option></select></div>
+      <div class="history-field"><label for="sortFilter">정렬</label><select id="sortFilter"><option value="newest">최신순</option><option value="oldest">오래된순</option><option value="name">파일명순</option></select></div>
+      <div class="refresh-wrap"><button id="refreshHistory" class="button button-secondary" type="button">새로고침</button></div>
+    </section>
+
+    <div class="history-summary"><strong id="historyCount">이미지를 불러오는 중입니다.</strong><span id="historySize">전체 용량 계산 중</span></div>
+    <section id="historyGrid" class="history-grid" aria-live="polite"><div class="history-loading">이미지 히스토리를 불러오는 중입니다.</div></section>
+    <div class="history-loadmore"><button id="loadMoreHistory" class="button button-secondary" type="button" hidden>더 보기</button></div>
+
+    <footer class="app-footer"><span>NINEWORKS ASSET · CLOUDFLARE R2</span></footer>
+  </main>
+  <div id="historyToast" class="history-toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      const grid = document.getElementById('historyGrid');
+      const search = document.getElementById('historySearch');
+      const folderFilter = document.getElementById('folderFilter');
+      const sortFilter = document.getElementById('sortFilter');
+      const refreshBtn = document.getElementById('refreshHistory');
+      const loadMoreBtn = document.getElementById('loadMoreHistory');
+      const countEl = document.getElementById('historyCount');
+      const sizeEl = document.getElementById('historySize');
+      const statusBadge = document.getElementById('statusBadge');
+      const toast = document.getElementById('historyToast');
+      const PAGE_SIZE = 48;
+      let allAssets = [];
+      let visibleCount = PAGE_SIZE;
+      let toastTimer;
+
+      const escapeHtml = (value) => String(value ?? '').replace(/[&<>'\"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[ch]));
+      const formatBytes = (bytes) => {
+        const n = Number(bytes || 0);
+        if (n < 1024) return `${n} B`;
+        if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+        if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(2)} MB`;
+        return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+      };
+      const formatDate = (value) => {
+        if (!value) return '날짜 없음';
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return '날짜 없음';
+        return new Intl.DateTimeFormat('ko-KR',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(d);
+      };
+      const showToast = (message) => {
+        clearTimeout(toastTimer); toast.textContent = message; toast.classList.add('show');
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+      };
+      const copyText = async (text, label) => {
+        try { await navigator.clipboard.writeText(text); showToast(`${label} 복사했습니다.`); }
+        catch { const area=document.createElement('textarea'); area.value=text; document.body.appendChild(area); area.select(); document.execCommand('copy'); area.remove(); showToast(`${label} 복사했습니다.`); }
+      };
+      const setStatus = (text, ready=false) => { statusBadge.innerHTML = `<i></i>${text}`; statusBadge.classList.toggle('success', ready); };
+
+      async function getFolders() {
+        const res = await fetch('/api/folders', {cache:'no-store'});
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.message || '폴더를 불러오지 못했습니다.');
+        return data.folders || [];
+      }
+
+      async function getAllAssetsInFolder(folder) {
+        const items = [];
+        let cursor = null;
+        do {
+          const params = new URLSearchParams({folder, limit:'1000'});
+          if (cursor) params.set('cursor', cursor);
+          const res = await fetch(`/api/assets?${params.toString()}`, {cache:'no-store'});
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.message || `${folder} 이미지를 불러오지 못했습니다.`);
+          items.push(...(data.items || []).map(item => ({...item, folder})));
+          cursor = data.truncated ? data.cursor : null;
+        } while (cursor);
+        return items;
+      }
+
+      function filteredAssets() {
+        const q = search.value.trim().toLowerCase();
+        const folder = folderFilter.value;
+        const result = allAssets.filter(item => {
+          if (folder !== 'all' && item.folder !== folder) return false;
+          if (!q) return true;
+          return [item.fileName,item.folder,item.originalName,item.cdnUrl].some(v => String(v || '').toLowerCase().includes(q));
+        });
+        result.sort((a,b) => {
+          if (sortFilter.value === 'oldest') return new Date(a.uploaded || 0) - new Date(b.uploaded || 0);
+          if (sortFilter.value === 'name') return String(a.fileName || '').localeCompare(String(b.fileName || ''),'ko');
+          return new Date(b.uploaded || 0) - new Date(a.uploaded || 0);
+        });
+        return result;
+      }
+
+      function render() {
+        const result = filteredAssets();
+        const shown = result.slice(0, visibleCount);
+        const totalSize = result.reduce((sum,item) => sum + Number(item.size || 0),0);
+        countEl.textContent = `총 ${result.length.toLocaleString('ko-KR')}개 이미지`;
+        sizeEl.textContent = `${folderFilter.value === 'all' ? '전체 프로젝트' : folderFilter.options[folderFilter.selectedIndex].text} · ${formatBytes(totalSize)}`;
+        loadMoreBtn.hidden = visibleCount >= result.length;
+
+        if (!result.length) {
+          grid.innerHTML = '<div class="history-empty">조건에 맞는 이미지가 없습니다.</div>';
+          return;
+        }
+
+        grid.innerHTML = shown.map((item,index) => {
+          const url = escapeHtml(item.cdnUrl);
+          const name = escapeHtml(item.fileName || item.originalName || 'image.webp');
+          const folder = escapeHtml(item.folder === 'uncategorized' ? '미분류' : item.folder);
+          return `<article class="history-card" data-index="${index}">
+            <div class="history-preview"><img src="${url}" alt="${name}" loading="lazy"><span class="folder-chip">${folder}</span></div>
+            <div class="history-card-body">
+              <p class="history-name" title="${name}">${name}</p>
+              <div class="history-meta"><span class="dimensions">확인 중</span><i></i><span>${formatBytes(item.size)}</span><i></i><span>${formatDate(item.uploaded)}</span></div>
+              <p class="history-url" title="${url}">${url}</p>
+              <div class="history-card-actions"><button type="button" data-copy-url>URL 복사</button><button type="button" data-copy-html>HTML 복사</button><a href="${url}" target="_blank" rel="noopener">열기</a></div>
+            </div>
+          </article>`;
+        }).join('');
+
+        [...grid.querySelectorAll('.history-card')].forEach((card,i) => {
+          const item = shown[i];
+          const img = card.querySelector('img');
+          const dim = card.querySelector('.dimensions');
+          const updateDimension = () => { if (img.naturalWidth && img.naturalHeight) dim.textContent = `${img.naturalWidth} × ${img.naturalHeight}`; };
+          if (img.complete) updateDimension(); else img.addEventListener('load', updateDimension, {once:true});
+          card.querySelector('[data-copy-url]').addEventListener('click', () => copyText(item.cdnUrl,'URL'));
+          card.querySelector('[data-copy-html]').addEventListener('click', () => copyText(`<img src="${item.cdnUrl}" alt="">`,'HTML'));
+        });
+      }
+
+      async function loadHistory() {
+        try {
+          setStatus('LOADING'); refreshBtn.disabled = true; grid.innerHTML = '<div class="history-loading">이미지 히스토리를 불러오는 중입니다.</div>';
+          const folders = await getFolders();
+          folderFilter.innerHTML = '<option value="all">전체 프로젝트</option>' + folders.map(folder => `<option value="${escapeHtml(folder)}">${escapeHtml(folder === 'uncategorized' ? '미분류' : folder)}</option>`).join('');
+          const groups = await Promise.all(folders.map(getAllAssetsInFolder));
+          allAssets = groups.flat(); visibleCount = PAGE_SIZE; render(); setStatus('READY',true);
+        } catch (error) {
+          console.error(error); grid.innerHTML = `<div class="history-empty">${escapeHtml(error.message || '히스토리를 불러오지 못했습니다.')}</div>`; countEl.textContent='불러오기 실패'; sizeEl.textContent=''; setStatus('ERROR');
+        } finally { refreshBtn.disabled = false; }
+      }
+
+      [search,folderFilter,sortFilter].forEach(el => el.addEventListener(el === search ? 'input' : 'change', () => { visibleCount = PAGE_SIZE; render(); }));
+      refreshBtn.addEventListener('click', loadHistory);
+      loadMoreBtn.addEventListener('click', () => { visibleCount += PAGE_SIZE; render(); });
+      loadHistory();
+    })();
+  </script>
+</body>
+</html>
